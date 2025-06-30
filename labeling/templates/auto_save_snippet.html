@@ -1,0 +1,67 @@
+<script>
+// 자동 저장 기능 - 페이지 로드 후 적용
+window.addEventListener('load', function() {
+    console.log('🔄 자동 저장 기능 활성화');
+    
+    // 기존 selectLabel 함수를 래핑
+    if (window.selectLabel && window.labelingState) {
+        const originalSelectLabel = window.selectLabel;
+        
+        window.selectLabel = async function(label) {
+            // 기존 로직 실행
+            originalSelectLabel(label);
+            
+            // 자동 저장 실행
+            setTimeout(async () => {
+                if (window.labelingState.selectedLabels.length > 0) {
+                    const currentImageId = window.labelingState.getCurrentImageId();
+                    if (currentImageId) {
+                        try {
+                            const success = await window.labelingState.saveLabelToServer(
+                                currentImageId, 
+                                window.labelingState.selectedLabels
+                            );
+                            if (success) {
+                                window.labelingState.hasChanges = false;
+                                console.log('✅ 자동 저장 완료');
+                                showSaveNotification('💾 자동 저장됨');
+                            }
+                        } catch (error) {
+                            console.error('자동 저장 실패:', error);
+                        }
+                    }
+                }
+            }, 100);
+        };
+    }
+    
+    // 저장 알림 표시
+    function showSaveNotification(message) {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed; top: 80px; right: 20px; 
+            background: #28a745; color: white; 
+            padding: 8px 16px; border-radius: 6px; 
+            font-size: 14px; z-index: 1000;
+            opacity: 0; transition: opacity 0.3s;
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => notification.style.opacity = '1', 10);
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 300);
+        }, 1500);
+    }
+    
+    // 저장 버튼 수정
+    const saveBtn = document.querySelector('button[onclick*="saveProgress"]');
+    if (saveBtn) {
+        saveBtn.textContent = '📊 진행률 백업';
+        saveBtn.style.opacity = '0.7';
+    }
+    
+    console.log('✅ 자동 저장 설정 완료');
+});
+</script> 

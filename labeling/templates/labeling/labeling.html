@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 {% block content %}
 <div class="container">
     <div class="screen">
@@ -106,8 +107,8 @@ const labelingState = {
     lastSavedLabels: {},
     hasChanges: false,
     
-    // 라벨 선택/해제
-    selectLabel: function(label) {
+    // 라벨 선택/해제 - 자동 저장 기능
+    selectLabel: async function(label) {
         const btn = document.querySelector(`[data-label="${label}"]`);
         if (btn.classList.contains('selected')) {
             btn.classList.remove('selected');
@@ -116,10 +117,27 @@ const labelingState = {
             btn.classList.add('selected');
             this.selectedLabels.push(label);
         }
-        this.saveCurrentLabels();
+        
+        // 즉시 서버에 자동 저장
+        await this.autoSaveCurrentLabels();
     },
     
-    // 현재 라벨 저장
+    // 자동 저장 함수 - 라벨 선택 시 즉시 서버에 저장
+    autoSaveCurrentLabels: async function() {
+        const imageId = this.getCurrentImageId();
+        if (imageId && this.selectedLabels.length > 0) {
+            this.labels[imageId] = [...this.selectedLabels];
+            
+            // 서버에 즉시 저장 (조용히 - 알림 없음)
+            const success = await this.saveLabelToServer(imageId, this.selectedLabels);
+            if (success) {
+                this.hasChanges = false; // 저장 완료 시 변경사항 플래그 리셋
+                console.log('자동 저장 완료:', imageId, this.selectedLabels);
+            }
+        }
+    },
+    
+    // 현재 라벨 저장 (기존 로컬 저장용)
     saveCurrentLabels: function() {
         const imageId = this.getCurrentImageId();
         if (imageId) {
