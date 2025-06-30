@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% load static %}
 {% block content %}
 <div class="container">
     <div class="screen">
@@ -107,8 +106,8 @@ const labelingState = {
     lastSavedLabels: {},
     hasChanges: false,
     
-    // 라벨 선택/해제 - 자동 저장 기능
-    selectLabel: async function(label) {
+    // 라벨 선택/해제 (자동 저장 포함)
+    selectLabel: function(label) {
         const btn = document.querySelector(`[data-label="${label}"]`);
         if (btn.classList.contains('selected')) {
             btn.classList.remove('selected');
@@ -117,32 +116,21 @@ const labelingState = {
             btn.classList.add('selected');
             this.selectedLabels.push(label);
         }
-        
-        // 즉시 서버에 자동 저장
-        await this.autoSaveCurrentLabels();
+        // 즉시 서버에 자동 저장 (알림 없음)
+        this.autoSaveToServer();
     },
     
-    // 자동 저장 함수 - 라벨 선택 시 즉시 서버에 저장
-    autoSaveCurrentLabels: async function() {
+    // 자동 저장 (알림 없음)
+    autoSaveToServer: async function() {
         const imageId = this.getCurrentImageId();
         if (imageId && this.selectedLabels.length > 0) {
-            this.labels[imageId] = [...this.selectedLabels];
-            
-            // 서버에 즉시 저장 (조용히 - 알림 없음)
-            const success = await this.saveLabelToServer(imageId, this.selectedLabels);
-            if (success) {
-                this.hasChanges = false; // 저장 완료 시 변경사항 플래그 리셋
-                console.log('자동 저장 완료:', imageId, this.selectedLabels);
+            try {
+                await this.saveLabelToServer(imageId, this.selectedLabels, false); // 알림 비활성화
+                this.hasChanges = false;
+            } catch (error) {
+                console.log('자동 저장 실패, 나중에 재시도됩니다.');
+                this.hasChanges = true;
             }
-        }
-    },
-    
-    // 현재 라벨 저장 (기존 로컬 저장용)
-    saveCurrentLabels: function() {
-        const imageId = this.getCurrentImageId();
-        if (imageId) {
-            this.labels[imageId] = [...this.selectedLabels];
-            this.hasChanges = true;
         }
     },
     
@@ -156,8 +144,8 @@ const labelingState = {
         return this.currentImageId;
     },
     
-    // 서버에 라벨 저장
-    saveLabelToServer: async function(imageId, labels) {
+    // 서버에 라벨 저장 (알림 옵션 추가)
+    saveLabelToServer: async function(imageId, labels, showAlert = true) {
         try {
             const response = await fetch('/api/labeling/save-label', {
                 method: 'POST',
@@ -172,20 +160,20 @@ const labelingState = {
             });
             
             if (response.ok) {
-                console.log('라벨 저장 성공:', imageId, labels);
+                if (showAlert) console.log('라벨 저장 성공:', imageId, labels);
                 return true;
             } else {
-                console.error('라벨 저장 실패:', response.status);
+                if (showAlert) console.error('라벨 저장 실패:', response.status);
                 return false;
             }
         } catch (error) {
-            console.error('라벨 저장 오류:', error);
+            if (showAlert) console.error('라벨 저장 오류:', error);
             return false;
         }
     },
     
-    // 진행률 저장
-    saveProgress: async function() {
+    // 진행률 저장 (수동 저장 시에만 알림)
+    saveProgress: async function(showAlert = true) {
         try {
             const response = await fetch('/api/labeling/save-progress', {
                 method: 'POST',
@@ -204,16 +192,16 @@ const labelingState = {
             if (response.ok) {
                 this.lastSavedLabels = JSON.parse(JSON.stringify(this.labels));
                 this.hasChanges = false;
-                alert('저장되었습니다!');
+                if (showAlert) alert('저장되었습니다!');
                 return true;
             } else {
                 console.log('서버 저장 실패, 로컬에 저장됨');
-                alert('저장되었습니다! (로컬 저장)');
+                if (showAlert) alert('저장되었습니다! (로컬 저장)');
                 return true;
             }
         } catch (error) {
             console.error('저장 오류:', error);
-            alert('저장되었습니다! (로컬 저장)');
+            if (showAlert) alert('저장되었습니다! (로컬 저장)');
             return true;
         }
     }
@@ -232,15 +220,10 @@ async function nextImage() {
         return;
     }
     
-    // 현재 이미지의 라벨을 서버에 저장
+    // 현재 이미지의 라벨을 서버에 자동 저장 (이미 저장되어 있음)
     const currentImageId = labelingState.getCurrentImageId();
-    const saveSuccess = await labelingState.saveLabelToServer(currentImageId, labelingState.selectedLabels);
-    
-    if (!saveSuccess) {
-        const continueAnyway = confirm('라벨 저장에 실패했습니다. 그래도 다음 이미지로 이동하시겠습니까?');
-        if (!continueAnyway) {
-            return;
-        }
+    if (labelingState.selectedLabels.length > 0) {
+        await labelingState.saveLabelToServer(currentImageId, labelingState.selectedLabels, false);
     }
     
     // 진행률 업데이트를 위한 UI 갱신
@@ -275,6 +258,12 @@ async function nextImage() {
 function previousImage() {
     console.log('previousImage 호출됨');
     if (labelingState.currentIndex > 0) {
+        // 이전 이미지로 이동 시 현재 작업 자동 저장 (알림 없음)
+        if (labelingState.selectedLabels.length > 0) {
+            const currentImageId = labelingState.getCurrentImageId();
+            labelingState.saveLabelToServer(currentImageId, labelingState.selectedLabels, false);
+        }
+        
         const prevIndex = labelingState.currentIndex - 1;
         window.location.href = `/labeling/${labelingState.batchId}/?index=${prevIndex}`;
     }
@@ -283,9 +272,9 @@ function previousImage() {
 async function skipImage() {
     console.log('skipImage 호출됨');
     
-    // 보류도 하나의 라벨로 처리 (빈 배열로 저장)
+    // 보류도 하나의 라벨로 처리 (자동 저장, 알림 없음)
     const currentImageId = labelingState.getCurrentImageId();
-    await labelingState.saveLabelToServer(currentImageId, ['skipped']);
+    await labelingState.saveLabelToServer(currentImageId, ['skipped'], false);
     
     labelingState.selectedLabels = [];
     document.querySelectorAll('.label-btn').forEach(btn => btn.classList.remove('selected'));
@@ -368,36 +357,14 @@ function createSaveConfirmModal() {
 
 // 저장 확인 함수
 function showSaveConfirmation(callback) {
-    if (!labelingState.isChanged || !labelingState.isChanged()) {
-        callback(true);
-        return;
+    // 현재 작업 중인 내용이 있다면 자동 저장
+    if (labelingState.selectedLabels.length > 0) {
+        const currentImageId = labelingState.getCurrentImageId();
+        labelingState.saveLabelToServer(currentImageId, labelingState.selectedLabels, false);
     }
     
-    const modal = createSaveConfirmModal();
-    
-    document.getElementById('saveAndLeave').onclick = function() {
-        labelingState.saveProgress().then(() => {
-            document.body.removeChild(modal);
-            callback(true);
-        });
-    };
-    
-    document.getElementById('stayOnPage').onclick = function() {
-        document.body.removeChild(modal);
-        callback(false);
-    };
-    
-    document.getElementById('leaveWithoutSave').onclick = function() {
-        document.body.removeChild(modal);
-        callback(true);
-    };
-    
-    modal.onclick = function(e) {
-        if (e.target === modal) {
-            document.body.removeChild(modal);
-            callback(false);
-        }
-    };
+    // 경고 없이 바로 나가기 (자동 저장되었으므로)
+    callback(true);
 }
 
 function goHome() {
