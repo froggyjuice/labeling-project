@@ -929,22 +929,22 @@ def create_batch_from_drive_files(request, folder_id):
             )
             
             for file in files:
-                # 이미지를 Django 서버에 다운로드해서 저장
-                local_url = download_and_save_image(service, file['id'], file['name'], batch.id)
-                if local_url:
+                # 프록시 URL 생성 (Render 호환)
+                proxy_url = download_and_save_image(service, file['id'], file['name'], batch.id)
+                if proxy_url:
                     Image.objects.create(
                         batch=batch,
                         file_name=file['name'],
-                        url=local_url,
+                        url=proxy_url,
                         drive_file_id=file['id']
                     )
                 else:
-                    # 다운로드 실패 시 프록시 URL 사용
-                    display_url = f"/proxy-drive-image/{file['id']}/"
+                    # 프록시 URL 생성 실패 시 기본 프록시 URL 사용
+                    fallback_url = f"/proxy/drive/{file['id']}/"
                     Image.objects.create(
                         batch=batch,
                         file_name=file['name'],
-                        url=display_url,
+                        url=fallback_url,
                         drive_file_id=file['id']
                     )
             
@@ -971,22 +971,22 @@ def create_batch_from_drive_files(request, folder_id):
                 )
                 
                 for file in batch_files:
-                    # 이미지를 Django 서버에 다운로드해서 저장
-                    local_url = download_and_save_image(service, file['id'], file['name'], batch.id)
-                    if local_url:
+                    # 프록시 URL 생성 (Render 호환)
+                    proxy_url = download_and_save_image(service, file['id'], file['name'], batch.id)
+                    if proxy_url:
                         Image.objects.create(
                             batch=batch,
                             file_name=file['name'],
-                            url=local_url,
+                            url=proxy_url,
                             drive_file_id=file['id']
                         )
                     else:
-                        # 다운로드 실패 시 프록시 URL 사용
-                        display_url = f"/proxy-drive-image/{file['id']}/"
+                        # 프록시 URL 생성 실패 시 기본 프록시 URL 사용
+                        fallback_url = f"/proxy/drive/{file['id']}/"
                         Image.objects.create(
                             batch=batch,
                             file_name=file['name'],
-                            url=display_url,
+                            url=fallback_url,
                             drive_file_id=file['id']
                         )
                 
@@ -1016,22 +1016,22 @@ def create_batch_from_drive_files(request, folder_id):
                 )
                 
                 for file in batch_files:
-                    # 이미지를 Django 서버에 다운로드해서 저장
-                    local_url = download_and_save_image(service, file['id'], file['name'], batch.id)
-                    if local_url:
+                    # 프록시 URL 생성 (Render 호환)
+                    proxy_url = download_and_save_image(service, file['id'], file['name'], batch.id)
+                    if proxy_url:
                         Image.objects.create(
                             batch=batch,
                             file_name=file['name'],
-                            url=local_url,
+                            url=proxy_url,
                             drive_file_id=file['id']
                         )
                     else:
-                        # 다운로드 실패 시 프록시 URL 사용
-                        display_url = f"/proxy-drive-image/{file['id']}/"
+                        # 프록시 URL 생성 실패 시 기본 프록시 URL 사용
+                        fallback_url = f"/proxy/drive/{file['id']}/"
                         Image.objects.create(
                             batch=batch,
                             file_name=file['name'],
-                            url=display_url,
+                            url=fallback_url,
                             drive_file_id=file['id']
                         )
                 
