@@ -7,6 +7,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Batch, Image, Label, LabelingResult, ImageAccessLog, Message
+from .thumbnail_utils import get_batch_thumbnail_url, validate_batch_thumbnails, check_thumbnail_system_health
 from django.views.decorators.csrf import csrf_exempt
 from django.db import models
 import json
@@ -103,11 +104,11 @@ def admin_dashboard(request):
     User = get_user_model()
     pending_users = User.objects.filter(role='user', is_approved=False).order_by('-date_joined')
     
-    # 배치별 썸네일 정보 추가
+    # 배치별 썸네일 정보 추가 (안전한 썸네일 시스템 사용)
     batches_with_info = []
     for batch in batches:
-        first_image = batch.images.first()
-        thumbnail_url = first_image.url if first_image else None
+        # 안전한 썸네일 URL 생성
+        thumbnail_url = get_batch_thumbnail_url(batch)
         
         # 배치별 전체 진행률 계산
         total_images = batch.images.count()
@@ -233,8 +234,8 @@ def dashboard(request):
         progress_percentage = (batch_completed / batch_total * 100) if batch_total > 0 else 0
         is_completed = batch_completed >= batch_total
         
-        # 첫 번째 이미지를 썸네일로 사용
-        thumbnail_url = batch_images.first().url if batch_images.exists() else None
+        # 안전한 썸네일 URL 생성 (전용 유틸리티 사용)
+        thumbnail_url = get_batch_thumbnail_url(batch)
         
         batch_data.append({
             "id": batch.id,

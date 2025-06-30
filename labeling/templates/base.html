@@ -556,16 +556,19 @@
             
             .labeling-screen {
                 flex-direction: column;
+                min-height: 100vh;
                 height: auto;
             }
             
             .image-section {
                 padding: 10px;
-                min-height: 50vh;
+                min-height: 35vh;
+                max-height: 45vh;
+                flex-shrink: 0;
             }
             
             .image-container {
-                max-height: 40vh;
+                max-height: 35vh;
             }
             
             .current-image {
@@ -575,8 +578,11 @@
             }
             
             .controls-section {
-                padding: 15px;
+                flex: 1;
+                padding: 15px 15px 40px 15px;
                 gap: 15px;
+                overflow-y: auto;
+                max-height: none;
             }
             
             .progress-info {
