@@ -229,6 +229,39 @@
                 <div class="section-actions">
                     <a href="{% url 'drive_import' %}" class="btn">새 배치 생성</a>
                 </div>
+                
+                <!-- 배치 상태 요약 -->
+                <div class="batch-status-summary" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                    <h4 style="margin: 0 0 10px 0; color: #2c3e50;">📊 배치 상태 요약</h4>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                        <div class="stat-item">
+                            <span class="stat-number" style="font-size: 24px; font-weight: bold; color: #3498db;">{{ batch_stats.total_batches }}</span>
+                            <span class="stat-label" style="display: block; color: #7f8c8d;">전체 배치</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" style="font-size: 24px; font-weight: bold; color: #27ae60;">{{ batch_stats.active_batches }}</span>
+                            <span class="stat-label" style="display: block; color: #7f8c8d;">활성 배치</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-number" style="font-size: 24px; font-weight: bold; color: #e67e22;">{{ batch_stats.inactive_batches }}</span>
+                            <span class="stat-label" style="display: block; color: #7f8c8d;">비활성 배치</span>
+                        </div>
+                    </div>
+                    
+                    {% if batch_stats.inactive_batches > 0 %}
+                    <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
+                        <strong>⚠️ 알림:</strong> {{ batch_stats.inactive_batches }}개의 비활성 배치가 있습니다. 
+                        사용자 모드에서는 활성 배치만 표시됩니다.
+                    </div>
+                    {% endif %}
+                    
+                    {% if batch_stats.active_batches == 0 %}
+                    <div style="margin-top: 15px; padding: 10px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 4px;">
+                        <strong>🚨 중요:</strong> 활성화된 배치가 없습니다! 
+                        사용자들이 라벨링할 수 있는 배치가 없는 상태입니다.
+                    </div>
+                    {% endif %}
+                </div>
                 {% if batches_with_info %}
                     <div class="batch-cards">
                         {% for batch_info in batches_with_info %}

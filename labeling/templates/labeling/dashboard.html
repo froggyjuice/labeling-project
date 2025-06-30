@@ -80,9 +80,35 @@
                     </div>
                     {% endfor %}
                 {% else %}
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #666;">
-                        <h3>배치가 없습니다</h3>
-                        <p>관리자가 배치를 생성할 때까지 기다려주세요.</p>
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                        <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 30px; max-width: 500px; margin: 0 auto;">
+                            <h3 style="color: #856404; margin: 0 0 15px 0;">⚠️ 활성화된 배치가 없습니다</h3>
+                            <p style="color: #856404; margin: 0 0 20px 0;">현재 라벨링할 수 있는 배치가 없습니다.</p>
+                            
+                            {% if batch_info.inactive_batches > 0 %}
+                            <div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 6px; padding: 20px; margin: 20px 0;">
+                                <strong style="color: #0c5460;">💡 해결 방법:</strong>
+                                <p style="color: #0c5460; margin: 10px 0;">관리자에게 다음 배치들을 활성화해달라고 요청하세요:</p>
+                                <ul style="margin: 10px 0 0 0; padding-left: 20px; text-align: left; color: #0c5460;">
+                                    {% for batch_name in batch_info.inactive_batch_names %}
+                                    <li>{{ batch_name }}</li>
+                                    {% endfor %}
+                                    {% if batch_info.inactive_batches > 3 %}
+                                    <li>그 외 {{ batch_info.inactive_batches|add:"-3" }}개...</li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                            {% else %}
+                            <div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 6px; padding: 20px; margin: 20px 0;">
+                                <strong style="color: #0c5460;">💡 해결 방법:</strong>
+                                <p style="color: #0c5460; margin: 10px 0 0 0;">관리자에게 새로운 배치를 생성해달라고 요청하세요.</p>
+                            </div>
+                            {% endif %}
+                            
+                            <button onclick="openMessageModal('global')" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 15px;">
+                                📧 관리자에게 문의하기
+                            </button>
+                        </div>
                     </div>
                 {% endif %}
             </div>

@@ -104,42 +104,10 @@ def admin_dashboard(request):
     User = get_user_model()
     pending_users = User.objects.filter(role='user', is_approved=False).order_by('-date_joined')
     
-    # 배치가 없는 경우 기존 배치 활성화 또는 샘플 배치 생성
-    if not batches.exists():
-        try:
-            # 먼저 비활성 배치가 있는지 확인
-            inactive_batches = Batch.objects.filter(is_active=False)
-            if inactive_batches.exists():
-                # 비활성 배치를 활성화
-                activated_count = inactive_batches.update(is_active=True)
-                print(f"[INFO] 관리자 대시보드: {activated_count}개 배치 활성화 완료")
-                batches = Batch.objects.all()
-            else:
-                # 배치가 전혀 없는 경우 샘플 배치 생성
-                from django.conf import settings
-                if not settings.DEBUG:  # 프로덕션 환경에서만
-                    sample_batch = Batch.objects.create(
-                        name="샘플 데이터 배치",
-                        is_active=True
-                    )
-                    
-                    from .models import Image
-                    sample_urls = [
-                        "https://via.placeholder.com/400x300/0066cc/ffffff?text=Admin+Sample+1",
-                        "https://via.placeholder.com/400x300/00cc66/ffffff?text=Admin+Sample+2"
-                    ]
-                    
-                    for url in sample_urls:
-                        Image.objects.create(
-                            batch=sample_batch,
-                            url=url,
-                            drive_file_id=None
-                        )
-                    
-                    print(f"[INFO] 관리자 대시보드: 샘플 배치 생성 완료")
-                    batches = Batch.objects.all()
-        except Exception as e:
-            print(f"[ERROR] 관리자 대시보드 배치 처리 실패: {str(e)}")
+    # 배치 상태 통계 추가
+    all_batches_count = Batch.objects.count()
+    active_batches_count = batches.count()
+    inactive_batches_count = Batch.objects.filter(is_active=False).count()
 
     # 배치별 썸네일 정보 추가 (안전한 썸네일 시스템 사용)
     batches_with_info = []
@@ -233,7 +201,12 @@ def admin_dashboard(request):
         'pending_users': pending_users,
         'user_stats': user_stats,
         'security_stats': security_stats,
-        'message_stats': message_stats
+        'message_stats': message_stats,
+        'batch_stats': {
+            'total_batches': all_batches_count,
+            'active_batches': active_batches_count,
+            'inactive_batches': inactive_batches_count
+        }
     }
     return render(request, 'labeling/admin_dashboard.html', context)
 
@@ -253,41 +226,6 @@ def dashboard(request):
     
     # 활성화된 배치만 표시
     batches = Batch.objects.filter(is_active=True)
-    
-    # 배치가 없는 경우 테스트 배치 자동 생성 (배포 환경 전용)
-    if not batches.exists():
-        try:
-            from django.conf import settings
-            # DEBUG가 False인 경우 (프로덕션 환경)에만 자동 생성
-            if not settings.DEBUG:
-                # 테스트 배치 생성
-                test_batch = Batch.objects.create(
-                    name="샘플 라벨링 배치",
-                    is_active=True
-                )
-                
-                # 샘플 이미지 추가
-                from .models import Image
-                sample_images = [
-                    "https://via.placeholder.com/400x300/0066cc/ffffff?text=Sample+Image+1",
-                    "https://via.placeholder.com/400x300/00cc66/ffffff?text=Sample+Image+2", 
-                    "https://via.placeholder.com/400x300/cc6600/ffffff?text=Sample+Image+3"
-                ]
-                
-                for i, url in enumerate(sample_images, 1):
-                    Image.objects.create(
-                        batch=test_batch,
-                        url=url,
-                        drive_file_id=None
-                    )
-                
-                print(f"[INFO] 테스트 배치 자동 생성 완료: {test_batch.name} (이미지 {len(sample_images)}개)")
-                
-                # 배치 목록 새로고침
-                batches = Batch.objects.filter(is_active=True)
-                
-        except Exception as e:
-            print(f"[ERROR] 테스트 배치 자동 생성 실패: {str(e)}")
     
     batch_data = []
     total_images = 0
@@ -324,6 +262,10 @@ def dashboard(request):
     
     overall_progress = (completed_images / total_images * 100) if total_images > 0 else 0
     
+    # 배치 상태 정보 추가
+    all_batches = Batch.objects.all()
+    inactive_batches = Batch.objects.filter(is_active=False)
+    
     context = {
         "batches": batch_data,
         "batches_json": batch_data,
@@ -332,6 +274,12 @@ def dashboard(request):
         "overall_progress": overall_progress,
         "google_user_info": request.session.get('google_user_info', {}),
         "user_role": request.user.role,
+        "batch_info": {
+            "has_active_batches": batches.exists(),
+            "total_batches": all_batches.count(),
+            "inactive_batches": inactive_batches.count(),
+            "inactive_batch_names": [batch.name for batch in inactive_batches[:3]]  # 최대 3개만 표시
+        }
     }
     
     return render(request, "labeling/dashboard.html", context)
