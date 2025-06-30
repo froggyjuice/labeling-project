@@ -22,17 +22,26 @@ def get_batch_thumbnail_url(batch):
         first_image = batch.images.first()
         
         if not first_image:
+            print(f"[INFO] 배치 {batch.id}에 이미지가 없음 - 기본 썸네일 사용")
             return get_default_thumbnail_url()
         
         # Google Drive 이미지인 경우 프록시 URL 생성
         if first_image.drive_file_id:
-            return f"/proxy/drive/{first_image.drive_file_id}/"
+            thumbnail_url = f"/proxy/drive/{first_image.drive_file_id}/"
+            print(f"[INFO] 배치 {batch.id} 썸네일: Drive 프록시 URL = {thumbnail_url}")
+            return thumbnail_url
         
         # 일반 이미지인 경우 직접 URL 사용
-        return first_image.url
+        if first_image.url:
+            print(f"[INFO] 배치 {batch.id} 썸네일: 직접 URL = {first_image.url}")
+            return first_image.url
+        
+        # URL이 없는 경우 기본 썸네일 사용
+        print(f"[WARNING] 배치 {batch.id} 이미지에 URL이 없음 - 기본 썸네일 사용")
+        return get_default_thumbnail_url()
         
     except Exception as e:
-        print(f"[WARNING] 썸네일 생성 실패 (배치 ID: {batch.id}): {str(e)}")
+        print(f"[ERROR] 썸네일 생성 실패 (배치 ID: {batch.id}): {str(e)}")
         return get_default_thumbnail_url()
 
 def get_default_thumbnail_url():
