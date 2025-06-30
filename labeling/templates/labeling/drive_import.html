@@ -58,6 +58,33 @@
                         <div id="splitPreview" style="margin-top: 10px; padding: 10px; background: white; border-radius: 6px; font-size: 0.9em; color: #666;"></div>
                     </div>
                     
+                    <!-- 테스트 모드 설정 -->
+                    <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #ffc107;">
+                        <div style="display: flex; align-items: center; margin-bottom: 10px;">
+                            <input type="checkbox" id="testMode" onchange="toggleTestMode()" style="margin-right: 10px; transform: scale(1.2);">
+                            <h4 style="margin: 0; color: #856404;">🧪 테스트 모드 (랜덤 샘플링)</h4>
+                        </div>
+                        <p style="margin: 5px 0 15px 0; color: #856404; font-size: 0.9em;">큰 폴더에서 일부 이미지만 랜덤으로 선택하여 테스트 배치를 생성합니다.</p>
+                        
+                        <div id="testModeOptions" style="display: none;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #856404;">Random Seed:</label>
+                                    <input type="number" id="randomSeed" value="42" min="0" max="999999" 
+                                           style="width: 100%; padding: 10px; border: 1px solid #ffc107; border-radius: 6px; background: white;">
+                                    <small style="color: #856404;">동일한 seed로 재현 가능한 랜덤 선택</small>
+                                </div>
+                                <div>
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 500; color: #856404;">최대 이미지 개수:</label>
+                                    <input type="number" id="maxImages" value="50" min="1" max="1000" 
+                                           style="width: 100%; padding: 10px; border: 1px solid #ffc107; border-radius: 6px; background: white;">
+                                    <small style="color: #856404;">폴더에서 선택할 최대 이미지 수</small>
+                                </div>
+                            </div>
+                            <div id="testModePreview" style="margin-top: 10px; padding: 10px; background: white; border-radius: 6px; font-size: 0.9em; color: #856404; border: 1px solid #ffc107;"></div>
+                        </div>
+                    </div>
+                    
                     <div style="margin: 20px 0;">
                         <button onclick="loadFiles()" class="btn">📂 폴더 파일 확인</button>
                         <button onclick="createBatch()" class="btn" style="background: linear-gradient(135deg, #28a745, #20c997);">🚀 배치 생성하기</button>
@@ -412,6 +439,11 @@ async function createBatch() {
     const splitMethod = document.getElementById('splitMethod').value;
     const splitValue = parseInt(document.getElementById('splitValue').value) || 0;
     
+    // 테스트 모드 파라미터
+    const testMode = document.getElementById('testMode').checked;
+    const randomSeed = parseInt(document.getElementById('randomSeed').value) || 42;
+    const maxImages = parseInt(document.getElementById('maxImages').value) || 50;
+    
     if (!folderId) {
         alert('Google Drive 폴더 URL을 먼저 입력해주세요.');
         return;
@@ -419,6 +451,11 @@ async function createBatch() {
     
     if (splitMethod !== 'single' && splitValue <= 0) {
         alert('분할 값을 올바르게 입력해주세요.');
+        return;
+    }
+    
+    if (testMode && maxImages <= 0) {
+        alert('최대 이미지 개수를 올바르게 입력해주세요.');
         return;
     }
     
@@ -439,6 +476,12 @@ async function createBatch() {
         formData.append('batch_name_prefix', batchNamePrefix);
         formData.append('split_method', splitMethod);
         formData.append('split_value', splitValue);
+        
+        // 테스트 모드 파라미터 추가
+        formData.append('test_mode', testMode);
+        formData.append('random_seed', randomSeed);
+        formData.append('max_images', maxImages);
+        
         formData.append('csrfmiddlewaretoken', getCsrfToken());
         
         const response = await fetch(`/drive-folder-files/?folder_id=${encodeURIComponent(folderId)}`, { 
@@ -546,11 +589,46 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+// 테스트 모드 토글 함수
+function toggleTestMode() {
+    const testMode = document.getElementById('testMode').checked;
+    const testModeOptions = document.getElementById('testModeOptions');
+    
+    if (testMode) {
+        testModeOptions.style.display = 'block';
+        updateTestModePreview();
+    } else {
+        testModeOptions.style.display = 'none';
+    }
+}
+
+// 테스트 모드 미리보기 업데이트
+function updateTestModePreview() {
+    const randomSeed = document.getElementById('randomSeed').value || 42;
+    const maxImages = document.getElementById('maxImages').value || 50;
+    
+    document.getElementById('testModePreview').innerHTML = `
+        <strong>🎲 Seed ${randomSeed}</strong>로 최대 <strong>${maxImages}개</strong> 이미지를 랜덤 선택합니다.<br>
+        <small>💡 동일한 seed 값으로 항상 같은 이미지들이 선택됩니다 (재현 가능).</small>
+    `;
+}
+
 // 페이지 로드 시 이벤트 리스너 추가
 document.addEventListener('DOMContentLoaded', function() {
     const splitValueInput = document.getElementById('splitValue');
     if (splitValueInput) {
         splitValueInput.addEventListener('input', updateSplitPreview);
+    }
+    
+    // 테스트 모드 관련 이벤트 리스너 추가
+    const randomSeedInput = document.getElementById('randomSeed');
+    const maxImagesInput = document.getElementById('maxImages');
+    
+    if (randomSeedInput) {
+        randomSeedInput.addEventListener('input', updateTestModePreview);
+    }
+    if (maxImagesInput) {
+        maxImagesInput.addEventListener('input', updateTestModePreview);
     }
 });
 

@@ -891,13 +891,19 @@ def list_drive_folder_files(request):
 
 @csrf_exempt
 def create_batch_from_drive_files(request, folder_id):
-    """Google Drive 폴더에서 배치 생성 (분할 배치 지원)"""
+    """Google Drive 폴더에서 배치 생성 (분할 배치 지원 + 랜덤 샘플링)"""
     try:
         from django.utils import timezone
+        import random
         
         batch_name_prefix = request.POST.get('batch_name_prefix', 'Google Drive 배치')
         split_method = request.POST.get('split_method', 'single')
         split_value = int(request.POST.get('split_value', 0)) if request.POST.get('split_value') else 0
+        
+        # 테스트 모드 파라미터
+        test_mode = request.POST.get('test_mode', 'false').lower() == 'true'
+        random_seed = int(request.POST.get('random_seed', 42)) if request.POST.get('random_seed') else 42
+        max_images = int(request.POST.get('max_images', 50)) if request.POST.get('max_images') else 50
         
         if 'drive_credentials' not in request.session:
             return JsonResponse({'error': 'Not authenticated'}, status=401)
@@ -917,6 +923,23 @@ def create_batch_from_drive_files(request, folder_id):
         
         if not files:
             return JsonResponse({'error': '폴더에 이미지 파일이 없습니다.'}, status=400)
+        
+        # 테스트 모드: 랜덤 샘플링
+        if test_mode:
+            print(f"[INFO] 테스트 모드 활성화 - Seed: {random_seed}, 최대 이미지: {max_images}")
+            random.seed(random_seed)  # 재현 가능한 랜덤 시드 설정
+            
+            if len(files) > max_images:
+                files = random.sample(files, max_images)
+                print(f"[INFO] 랜덤 샘플링: {len(files)}개 이미지 선택됨 (전체 {len(results.get('files', []))}개 중)")
+                
+                # 테스트 모드 배치명에 표시
+                if batch_name_prefix == 'Google Drive 배치':
+                    batch_name_prefix = f'테스트_{batch_name_prefix}_seed{random_seed}'
+                else:
+                    batch_name_prefix = f'테스트_{batch_name_prefix}_seed{random_seed}'
+            else:
+                print(f"[INFO] 폴더 이미지 수({len(files)})가 최대값({max_images})보다 적어 전체 사용")
         
         # 분할 방식에 따라 배치 생성
         created_batches = []
