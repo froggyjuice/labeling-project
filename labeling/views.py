@@ -1064,28 +1064,22 @@ def create_batch_from_drive_files(request, folder_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 def download_and_save_image(service, file_id, file_name, batch_id):
-    """Google Drive 이미지를 다운로드해서 Django media 폴더에 저장"""
+    """Google Drive 이미지를 프록시 URL로 반환 (Render 호환)"""
     try:
-        # media/batch_images/{batch_id}/ 디렉토리 생성
-        batch_dir = f"batch_images/{batch_id}"
-        os.makedirs(os.path.join(settings.MEDIA_ROOT, batch_dir), exist_ok=True)
+        # Render는 읽기 전용 파일 시스템이므로 프록시 방식 사용
+        # 파일 존재 여부 확인 (선택적)
+        try:
+            file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
+            print(f"[INFO] 프록시 이미지 설정: {file_name} (ID: {file_id})")
+        except Exception as e:
+            print(f"[WARNING] 파일 메타데이터 확인 실패 {file_id}: {str(e)}")
         
-        # 파일 확장자 추출
-        file_extension = os.path.splitext(file_name)[1] or '.jpg'
-        safe_filename = f"{uuid.uuid4().hex}{file_extension}"
-        
-        # Google Drive에서 파일 다운로드
-        file_content = service.files().get_media(fileId=file_id).execute()
-        
-        # Django storage에 저장
-        file_path = f"{batch_dir}/{safe_filename}"
-        saved_path = default_storage.save(file_path, ContentFile(file_content))
-        
-        # URL 반환
-        return f"/media/{saved_path}"
+        # 프록시 URL 반환 (다운로드 없이 직접 서빙)
+        proxy_url = f"/proxy/drive/{file_id}/"
+        return proxy_url
         
     except Exception as e:
-        print(f"이미지 다운로드 실패 {file_id}: {str(e)}")
+        print(f"[ERROR] 프록시 URL 생성 실패 {file_id}: {str(e)}")
         return None
 
 def drive_import(request):
