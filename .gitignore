@@ -1,1 +1,86 @@
+# API Keys and Secrets
+api_key.txt
 client_id.json
+*.json
+*_key.txt
+*.key
+*.pem
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+*.env
+
+# Database
+db.sqlite3
+*.db
+*.sqlite
+*.sqlite3
+
+# Django
+local_settings.py
+settings_local.py
+
+# Media files (too large for git)
+media/
+uploads/
+
+# Static files (generated)
+staticfiles/
+static_collected/
+
+# Development files
+.vscode/
+.idea/
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Ngrok
+ngrok
+ngrok.exe
+ngrok.zip
+ngrok-v3.zip
+ngrok-v3/
+start_ngrok.*
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backup files
+backup/
+*.backup
+*.bak
+
+# Temporary files
+tmp/
+temp/
+*.tmp
