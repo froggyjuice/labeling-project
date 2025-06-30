@@ -3,8 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>이미지 라벨링 시스템</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.4.0/axios.min.js"></script>
+    <script>
+        // CSRF 토큰 가져오기 함수
+        function getCSRFToken() {
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            if (!token) {
+                console.warn('CSRF 토큰을 찾을 수 없습니다.');
+            }
+            return token || '';
+        }
+        
+        // 쿠키에서 CSRF 토큰 가져오기 (대체 방법)
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // CSRF 토큰 가져오기 (메타 태그 > 쿠키 순서로 시도)
+        function getCSRFTokenFromMultipleSources() {
+            return getCSRFToken() || getCookie('csrftoken') || '';
+        }
+    </script>
     <style>
         * {
             margin: 0;
