@@ -6,8 +6,19 @@ HTTPS 강제 및 보안 강화
 from .settings import *
 import os
 
-# django-storages를 INSTALLED_APPS에 추가
-INSTALLED_APPS = INSTALLED_APPS + ['storages']
+# 프로덕션용 INSTALLED_APPS (개발용 패키지 제외)
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    # 'django_extensions',  # 개발용 - 프로덕션에서 제거
+    # 'sslserver',  # 개발용 HTTPS - 프로덕션에서 제거 (Render에서 자동 HTTPS 제공)
+    'labeling',
+    'storages',  # S3 스토리지용
+]
 
 # 프로덕션 환경 설정
 DEBUG = False
