@@ -34,6 +34,13 @@
             <!-- Google Drive 권한 상태 섹션 -->
             <div class="section">
                 <h3>🔒 Google Drive 인증 상태</h3>
+                
+                <!-- 디버깅 정보 (개발용) -->
+                <div style="background: #f0f0f0; padding: 0.5rem; margin: 0.5rem 0; font-size: 0.8rem; border-radius: 4px;">
+                    🔧 디버깅: drive_credentials_available = {{ drive_credentials_available|default:"None" }}
+                    | session.drive_credentials = {% if 'drive_credentials' in request.session %}있음{% else %}없음{% endif %}
+                </div>
+                
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
                     {% if drive_credentials_available %}
                         <span style="font-size: 1.2rem;">✅</span>
