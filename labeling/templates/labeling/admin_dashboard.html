@@ -1,0 +1,1255 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <div class="screen">
+        <!-- 네비게이션 헤더 -->
+        <div class="nav-header">
+            <div class="nav-left">
+                <div class="logo">👨‍💼 Admin Panel</div>
+                <div class="breadcrumb">
+                    <span class="breadcrumb-item active">관리자 대시보드</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                {% if user.is_authenticated %}
+                    <div class="user-info">
+                        <div>
+                            <div>{{ user.first_name }} (관리자)</div>
+                            <div style="font-size: 0.8rem; color: #666;">{{ user.email|default:"" }}</div>
+                        </div>
+                    </div>
+                    <a href="{% url 'admin_messages' %}" class="btn btn-small" style="background: #17a2b8;">
+                        💬 메시지 관리
+                        {% if message_stats.unread_messages > 0 %}
+                            <span class="notification-badge">{{ message_stats.unread_messages }}</span>
+                        {% endif %}
+                    </a>
+                    <a href="{% url 'drive_import' %}" class="btn btn-small">Google Drive</a>
+                    <a href="{% url 'logout' %}" class="btn btn-small">로그아웃</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="admin-dashboard">
+            <!-- Google Drive 권한 상태 섹션 -->
+            <div class="section">
+                <h3>Google Drive 권한 상태</h3>
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <span style="font-size: 1.2rem;">{% if 'drive_credentials' in request.session %}✅{% else %}⚠️{% endif %}</span>
+                    <h4 style="margin: 0; color: {% if 'drive_credentials' in request.session %}#27ae60{% else %}#f39c12{% endif %};">
+                        Google Drive 권한 상태
+                    </h4>
+                </div>
+                {% if 'drive_credentials' in request.session %}
+                    <p style="margin: 0; color: #27ae60;">✓ Google Drive 권한이 활성화되어 있습니다. 이미지 프록시가 정상 작동합니다.</p>
+                {% else %}
+                    <p style="margin: 0 0 1rem 0; color: #e67e22;">
+                        ⚠️ Google Drive 권한이 설정되지 않았습니다. 사용자들이 이미지를 볼 수 없을 수 있습니다.
+                    </p>
+                    <a href="{% url 'google_admin_login_start' %}" 
+                       style="background: #3498db; color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; display: inline-block;">
+                       🔗 Google Drive 권한으로 다시 로그인
+                    </a>
+                {% endif %}
+            </div>
+
+            <!-- 승인 대기 중인 사용자들 -->
+            <div class="section">
+                <h3>🔄 승인 대기 중인 사용자</h3>
+                {% if pending_users %}
+                    <div class="user-cards">
+                        {% for user in pending_users %}
+                        <div class="user-card pending">
+                            <div class="user-info">
+                                <div class="user-name">{{ user.first_name }}</div>
+                                <div class="user-email">{{ user.email }}</div>
+                                <div class="user-meta">가입일: {{ user.date_joined|date:"Y-m-d H:i" }}</div>
+                            </div>
+                            <div class="user-actions">
+                                <a href="{% url 'approve_user' user.id %}" class="btn-approve" onclick="return confirm('{{ user.first_name }}님을 승인하시겠습니까?')">승인</a>
+                                <a href="{% url 'reject_user' user.id %}" class="btn-reject" onclick="return confirm('{{ user.first_name }}님의 계정을 거절하시겠습니까?')">거절</a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <p>승인 대기 중인 사용자가 없습니다.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- 승인된 사용자들 -->
+            <div class="section">
+                <h3>✅ 승인된 사용자</h3>
+                {% if user_stats %}
+                    <div class="user-cards">
+                        {% for stat in user_stats %}
+                        <div class="user-card approved">
+                            <div class="user-info">
+                                <div class="user-name">{{ stat.user.first_name }}</div>
+                                <div class="user-email">{{ stat.user.email }}</div>
+                                <div class="user-meta">
+                                    승인일: {{ stat.user.approved_at|date:"Y-m-d H:i" }}<br>
+                                    승인자: {{ stat.user.approved_by.first_name }}
+                                </div>
+                            </div>
+                            <div class="user-actions">
+                                <span class="status-badge active">활성</span>
+                                <a href="{% url 'revoke_user_approval' stat.user.id %}" 
+                                   class="btn-revoke" 
+                                   onclick="return confirm('{{ stat.user.first_name }}님의 승인을 취소하시겠습니까? 해당 사용자는 다시 승인 대기 상태가 됩니다.')">
+                                    승인 취소
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <p>승인된 사용자가 없습니다.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- 사용자별 진행률 통계 -->
+            <div class="section">
+                <h3>📊 사용자별 진행률 통계</h3>
+                {% if user_stats %}
+                    <div class="progress-stats">
+                        {% for stat in user_stats %}
+                        <div class="user-progress-card">
+                            <div class="user-header">
+                                <div class="user-name-large">{{ stat.user.first_name }}</div>
+                                <div class="user-email-small">{{ stat.user.email }}</div>
+                            </div>
+                            
+                            <div class="overall-progress">
+                                <div class="progress-label">전체 진행률</div>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width: {{ stat.overall_progress }}%"></div>
+                                    </div>
+                                    <span class="progress-text">{{ stat.overall_progress }}%</span>
+                                </div>
+                                <div class="progress-numbers">
+                                    {{ stat.total_completed }} / {{ stat.total_assigned }} 완료
+                                </div>
+                            </div>
+                            
+                            <div class="batch-details">
+                                <div class="details-header toggleable" onclick="toggleBatchDetails(this)" data-user-id="{{ stat.user.id }}">
+                                    <span class="details-title">배치별 세부 진행률</span>
+                                    <span class="toggle-icon">▼</span>
+                                </div>
+                                <div class="batch-details-content" id="batch-details-{{ stat.user.id }}">
+                                    {% for batch_progress in stat.batch_progress %}
+                                    <div class="batch-progress-item">
+                                        <div class="batch-progress-header">
+                                            <span class="batch-name-small">{{ batch_progress.batch_name }}</span>
+                                            <span class="batch-percentage">{{ batch_progress.progress }}%</span>
+                                        </div>
+                                        <div class="mini-progress-bar">
+                                            <div class="mini-progress-fill" style="width: {{ batch_progress.progress }}%"></div>
+                                        </div>
+                                        <div class="batch-numbers">
+                                            {{ batch_progress.completed }}/{{ batch_progress.total }}
+                                        </div>
+                                    </div>
+                                    {% empty %}
+                                    <div class="no-batches">활성 배치가 없습니다.</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <p>진행률을 표시할 사용자가 없습니다.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- 메시지 관리 -->
+            <div class="section">
+                <h3>💬 메시지 관리</h3>
+                <div class="section-actions">
+                    <a href="{% url 'admin_messages' %}" class="btn">모든 메시지 보기</a>
+                </div>
+                
+                <div class="message-overview">
+                    <div class="message-stats-grid">
+                        <div class="message-stat-card total">
+                            <div class="stat-number">{{ message_stats.total_messages }}</div>
+                            <div class="stat-label">총 메시지</div>
+                        </div>
+                        <div class="message-stat-card unread">
+                            <div class="stat-number">{{ message_stats.unread_messages }}</div>
+                            <div class="stat-label">읽지 않은 메시지</div>
+                        </div>
+                        <div class="message-stat-card pending">
+                            <div class="stat-number">{{ message_stats.pending_replies }}</div>
+                            <div class="stat-label">답변 대기</div>
+                        </div>
+                    </div>
+                    
+                    {% if message_stats.recent_messages %}
+                        <div class="recent-messages">
+                            <h4>최근 메시지</h4>
+                            <div class="message-list-preview">
+                                {% for message in message_stats.recent_messages %}
+                                <div class="message-preview-item {% if not message.is_read %}unread{% endif %}">
+                                    <div class="message-preview-header">
+                                        <span class="sender-name">{{ message.sender.username }}</span>
+                                        <span class="message-type-badge">
+                                            {% if message.message_type == 'global' %}🌍 전역{% else %}📦 {{ message.batch.name }}{% endif %}
+                                        </span>
+                                        <span class="message-date">{{ message.created_at|date:"m-d H:i" }}</span>
+                                    </div>
+                                    <div class="message-preview-subject">{{ message.subject }}</div>
+                                    {% if not message.is_read %}
+                                        <span class="unread-indicator">새 메시지</span>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="empty-state">
+                            <p>아직 접수된 메시지가 없습니다.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 배치 관리 -->
+            <div class="section">
+                <h3>📂 배치 관리</h3>
+                <div class="section-actions">
+                    <a href="{% url 'drive_import' %}" class="btn">새 배치 생성</a>
+                </div>
+                {% if batches_with_info %}
+                    <div class="batch-cards">
+                        {% for batch_info in batches_with_info %}
+                        <div class="batch-card {% if not batch_info.batch.is_active %}inactive{% endif %}">
+                            <!-- 썸네일 표시 -->
+                            {% if batch_info.thumbnail_url %}
+                            <div class="batch-thumbnail">
+                                <img src="{{ batch_info.thumbnail_url }}" alt="배치 썸네일" style="width: 100%; height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 15px;">
+                            </div>
+                            {% endif %}
+                            
+                            <div class="batch-info">
+                                <div class="batch-name">
+                                    {{ batch_info.batch.name }}
+                                    {% if not batch_info.batch.is_active %}
+                                        <span class="status-inactive">비활성</span>
+                                    {% endif %}
+                                </div>
+                                <div class="batch-meta">{{ batch_info.total_images }}개 이미지</div>
+                                <div class="batch-meta">생성일: {{ batch_info.batch.created_at|date:"Y-m-d"|default:"알 수 없음" }}</div>
+                                
+                                <!-- 배치 전체 진행률 -->
+                                <div class="batch-progress-summary">
+                                    <div class="progress-label-small">전체 진행률: {{ batch_info.progress_percentage }}%</div>
+                                    <div class="mini-progress-bar">
+                                        <div class="mini-progress-fill" style="width: {{ batch_info.progress_percentage }}%"></div>
+                                    </div>
+                                    <div class="progress-numbers-small">{{ batch_info.labeled_count }}/{{ batch_info.total_images }}</div>
+                                </div>
+                            </div>
+                            <div class="batch-actions">
+                                <a href="{% url 'labeling' batch_info.batch.id %}" class="btn-view">보기</a>
+                                <a href="{% url 'toggle_batch_active' batch_info.batch.id %}" 
+                                   class="btn-toggle" 
+                                   onclick="return confirm('배치 상태를 변경하시겠습니까?')">
+                                    {% if batch_info.batch.is_active %}비활성화{% else %}활성화{% endif %}
+                                </a>
+                                <a href="{% url 'reset_batch_progress' batch_info.batch.id %}" 
+                                   class="btn-reset" 
+                                   onclick="return confirm('배치의 모든 진행률을 초기화하시겠습니까?')">
+                                    초기화
+                                </a>
+                                <a href="{% url 'delete_batch' batch_info.batch.id %}" 
+                                   class="btn-delete" 
+                                   onclick="return confirm('배치를 완전히 삭제하시겠습니까?')">
+                                    삭제
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <p>생성된 배치가 없습니다.</p>
+                        <a href="{% url 'drive_import' %}" class="btn">첫 번째 배치 생성하기</a>
+                    </div>
+                {% endif %}
+            </div>
+
+            <!-- 보안 모니터링 -->
+            <div class="section">
+                <h3>🔒 보안 모니터링 (최근 24시간)</h3>
+                <div class="security-overview">
+                    <div class="security-stats-grid">
+                        <div class="security-stat-card success">
+                            <div class="stat-number">{{ security_stats.successful_requests }}</div>
+                            <div class="stat-label">성공한 요청</div>
+                        </div>
+                        <div class="security-stat-card error">
+                            <div class="stat-number">{{ security_stats.failed_requests }}</div>
+                            <div class="stat-label">실패한 요청</div>
+                        </div>
+                        <div class="security-stat-card warning">
+                            <div class="stat-number">{{ security_stats.rate_limit_violations }}</div>
+                            <div class="stat-label">속도 제한 위반</div>
+                        </div>
+                        <div class="security-stat-card danger">
+                            <div class="stat-number">{{ security_stats.unauthorized_attempts }}</div>
+                            <div class="stat-label">무단 접근 시도</div>
+                        </div>
+                    </div>
+                    
+                    <div class="security-details">
+                        <div class="security-detail-section">
+                            <h4>🔥 최다 요청 사용자</h4>
+                            {% if security_stats.top_users %}
+                                <div class="top-users-list">
+                                    {% for user_stat in security_stats.top_users %}
+                                    <div class="top-user-item">
+                                        <span class="user-email">{{ user_stat.user__email }}</span>
+                                        <span class="request-count">{{ user_stat.request_count }}회</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="no-data">데이터가 없습니다.</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="security-detail-section">
+                            <h4>⚠️ 최근 실패한 요청</h4>
+                            {% if security_stats.recent_failures %}
+                                <div class="recent-failures-list">
+                                    {% for failure in security_stats.recent_failures %}
+                                    <div class="failure-item">
+                                        <div class="failure-header">
+                                            <span class="failure-user">{{ failure.user.email }}</span>
+                                            <span class="failure-time">{{ failure.access_time|date:"m/d H:i" }}</span>
+                                        </div>
+                                        <div class="failure-message">{{ failure.error_message }}</div>
+                                        <div class="failure-ip">IP: {{ failure.ip_address }}</div>
+                                    </div>
+  {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="no-data">실패한 요청이 없습니다.</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.admin-dashboard {
+    padding: 20px;
+}
+
+.section {
+    background: white;
+    border-radius: 15px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.section h3 {
+    margin-bottom: 20px;
+    font-size: 1.5rem;
+    color: #333;
+}
+
+.section-actions {
+    margin-bottom: 20px;
+    text-align: right;
+}
+
+.user-cards, .batch-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.user-card, .batch-card {
+    border: 2px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.user-card.pending {
+    border-color: #ffc107;
+    background: #fff9e6;
+}
+
+.user-card.approved {
+    border-color: #28a745;
+    background: #f0fff4;
+}
+
+.user-card:hover, .batch-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.user-info, .batch-info {
+    margin-bottom: 15px;
+}
+
+.user-name, .batch-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.user-email {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 8px;
+}
+
+.user-meta, .batch-meta {
+    color: #888;
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.user-actions, .batch-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-approve, .btn-reject, .btn-view, .btn-revoke {
+    padding: 8px 16px;
+    border-radius: 20px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-approve {
+    background: #28a745;
+    color: white;
+}
+
+.btn-approve:hover {
+    background: #218838;
+    color: white;
+    text-decoration: none;
+}
+
+.btn-reject {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-reject:hover {
+    background: #c82333;
+    color: white;
+    text-decoration: none;
+}
+
+.btn-view {
+    background: #007bff;
+    color: white;
+}
+
+.btn-view:hover {
+    background: #0056b3;
+    color: white;
+    text-decoration: none;
+}
+
+.btn-revoke {
+    background: #fd7e14;
+    color: white;
+}
+
+.btn-revoke:hover {
+    background: #e55600;
+    color: white;
+    text-decoration: none;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.status-badge.active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #666;
+}
+
+.empty-state p {
+    margin-bottom: 20px;
+    font-size: 1.1rem;
+}
+
+.nav-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 30px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 15px;
+    margin-bottom: 20px;
+}
+
+.nav-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: 700;
+}
+
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.user-info {
+    text-align: right;
+}
+
+.btn {
+    padding: 10px 20px;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    text-decoration: none;
+    border-radius: 20px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    background: rgba(255,255,255,0.3);
+    color: white;
+    text-decoration: none;
+}
+
+.btn-small {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+}
+
+/* 배치 관리 기능 스타일 */
+.btn-toggle, .btn-reset, .btn-delete {
+    padding: 8px 16px;
+    border-radius: 20px;
+    text-decoration: none;
+    font-size: 0.9rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-toggle {
+    background: #ffc107;
+    color: #212529;
+}
+
+.btn-toggle:hover {
+    background: #e0a800;
+    color: #212529;
+    text-decoration: none;
+}
+
+.btn-reset {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-reset:hover {
+    background: #5a6268;
+    color: white;
+    text-decoration: none;
+}
+
+.btn-delete {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-delete:hover {
+    background: #c82333;
+    color: white;
+    text-decoration: none;
+}
+
+.batch-card.inactive {
+    opacity: 0.6;
+    background: #f8f9fa;
+}
+
+.status-inactive {
+    background: #dc3545;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    margin-left: 10px;
+}
+
+.batch-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* 사용자별 진행률 통계 스타일 */
+.progress-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 25px;
+}
+
+.user-progress-card {
+    border: 2px solid #e8f4fd;
+    border-radius: 15px;
+    padding: 25px;
+    background: linear-gradient(135deg, #f8fcff 0%, #e8f4fd 100%);
+    transition: all 0.3s ease;
+}
+
+.user-progress-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 35px rgba(0,0,0,0.15);
+}
+
+.user-header {
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 15px;
+}
+
+.user-name-large {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.user-email-small {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+.overall-progress {
+    margin-bottom: 25px;
+    padding: 20px;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid #e8f4fd;
+}
+
+.progress-label {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #34495e;
+    margin-bottom: 10px;
+}
+
+.progress-bar-container {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 8px;
+}
+
+.progress-bar {
+    flex: 1;
+    height: 12px;
+    background: #ecf0f1;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    border-radius: 6px;
+    transition: width 0.6s ease;
+}
+
+.progress-text {
+    font-weight: 600;
+    color: #2c3e50;
+    min-width: 45px;
+}
+
+.progress-numbers {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+.batch-details {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid #e8f4fd;
+}
+
+.details-header {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #34495e;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ecf0f1;
+}
+
+.batch-progress-item {
+    margin-bottom: 15px;
+    padding: 12px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #3498db;
+}
+
+.batch-progress-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.batch-name-small {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 0.9rem;
+}
+
+.batch-percentage {
+    font-weight: 600;
+    color: #27ae60;
+    font-size: 0.9rem;
+}
+
+.mini-progress-bar {
+    height: 6px;
+    background: #ecf0f1;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+
+.mini-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.batch-numbers {
+    font-size: 0.8rem;
+    color: #7f8c8d;
+}
+
+.no-batches {
+    text-align: center;
+    color: #95a5a6;
+    font-style: italic;
+    padding: 20px;
+}
+
+/* 배치 관리 개선 스타일 */
+.batch-progress-summary {
+    margin-top: 15px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #3498db;
+}
+
+.progress-label-small {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #2c3e50;
+    margin-bottom: 8px;
+}
+
+.progress-numbers-small {
+    font-size: 0.8rem;
+    color: #7f8c8d;
+    margin-top: 5px;
+}
+
+.batch-thumbnail {
+    margin-bottom: 15px;
+}
+
+.batch-thumbnail img {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 2px solid #e0e0e0;
+}
+
+/* 보안 모니터링 스타일 */
+.security-overview {
+    margin-top: 20px;
+}
+
+.security-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.security-stat-card {
+    text-align: center;
+    padding: 25px;
+    border-radius: 12px;
+    border: 2px solid;
+    transition: all 0.3s ease;
+}
+
+.security-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.security-stat-card.success {
+    border-color: #28a745;
+    background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+}
+
+.security-stat-card.error {
+    border-color: #dc3545;
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+}
+
+.security-stat-card.warning {
+    border-color: #ffc107;
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+}
+
+.security-stat-card.danger {
+    border-color: #e74c3c;
+    background: linear-gradient(135deg, #fadbd8 0%, #f1948a 100%);
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #2c3e50;
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #34495e;
+}
+
+.security-details {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.security-detail-section {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 25px;
+    border: 1px solid #e9ecef;
+}
+
+.security-detail-section h4 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+    font-size: 1.2rem;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 10px;
+}
+
+.top-users-list, .recent-failures-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.top-user-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    background: white;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    border-left: 4px solid #3498db;
+}
+
+.user-email {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.request-count {
+    background: #3498db;
+    color: white;
+    padding: 4px 12px;
+    border-radius: 15px;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.failure-item {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 12px;
+    border-left: 4px solid #e74c3c;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.failure-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.failure-user {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.failure-time {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+.failure-message {
+    color: #e74c3c;
+    font-weight: 500;
+    margin-bottom: 5px;
+    font-size: 0.9rem;
+}
+
+.failure-ip {
+    color: #95a5a6;
+    font-size: 0.8rem;
+}
+
+.no-data {
+    text-align: center;
+    color: #95a5a6;
+    font-style: italic;
+    padding: 30px;
+}
+
+@media (max-width: 768px) {
+    .security-details {
+        grid-template-columns: 1fr;
+    }
+    
+    .security-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* 메시지 관리 스타일 */
+.notification-badge {
+    background: #dc3545;
+    color: white;
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: bold;
+    margin-left: 5px;
+    display: inline-block;
+    min-width: 16px;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.message-overview {
+    margin-top: 20px;
+}
+
+.message-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.message-stat-card {
+    text-align: center;
+    padding: 25px;
+    border-radius: 12px;
+    border: 2px solid;
+    transition: all 0.3s ease;
+}
+
+.message-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.message-stat-card.total {
+    border-color: #007bff;
+    background: linear-gradient(135deg, #cce7ff 0%, #b3d9ff 100%);
+}
+
+.message-stat-card.unread {
+    border-color: #dc3545;
+    background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+}
+
+.message-stat-card.pending {
+    border-color: #ffc107;
+    background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+}
+
+.recent-messages {
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 25px;
+    border: 1px solid #e9ecef;
+}
+
+.recent-messages h4 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+    font-size: 1.2rem;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 10px;
+}
+
+.message-list-preview {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.message-preview-item {
+    background: white;
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 12px;
+    border-left: 4px solid #007bff;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.2s ease;
+}
+
+.message-preview-item.unread {
+    border-left-color: #dc3545;
+    box-shadow: 0 2px 8px rgba(220,53,69,0.2);
+}
+
+.message-preview-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.message-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.sender-name {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.message-type-badge {
+    background: #e9ecef;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    color: #666;
+}
+
+.message-date {
+    color: #7f8c8d;
+    font-size: 0.9rem;
+}
+
+.message-preview-subject {
+    color: #2c3e50;
+    font-weight: 500;
+    margin-bottom: 5px;
+    line-height: 1.3;
+}
+
+.unread-indicator {
+    background: #dc3545;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+@media (max-width: 768px) {
+    .message-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .message-preview-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}
+
+/* 배치별 세부 진행률 토글 스타일 */
+.details-header.toggleable {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 15px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+    margin-bottom: 15px;
+    transition: all 0.3s ease;
+    user-select: none;
+}
+
+.details-header.toggleable:hover {
+    background: linear-gradient(135deg, #e9ecef 0%, #dee2e6 100%);
+    border-color: #adb5bd;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.details-title {
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 1rem;
+}
+
+.toggle-icon {
+    font-size: 14px;
+    color: #6c757d;
+    transition: transform 0.3s ease;
+    font-weight: bold;
+}
+
+.toggle-icon.rotated {
+    transform: rotate(-90deg);
+}
+
+.batch-details-content {
+    max-height: 1000px;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    opacity: 1;
+}
+
+.batch-details-content.collapsed {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+}
+
+.batch-details-content:not(.collapsed) {
+    animation: fadeInDown 0.3s ease;
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 기본적으로 세부 진행률을 접힌 상태로 설정 */
+.batch-details-content {
+    max-height: 0;
+    opacity: 0;
+    margin-bottom: 0;
+}
+
+.batch-details-content.expanded {
+    max-height: 1000px;
+    opacity: 1;
+    margin-bottom: 15px;
+}
+</style>
+
+<script>
+function toggleBatchDetails(headerElement) {
+    const userId = headerElement.getAttribute('data-user-id');
+    const contentElement = document.getElementById('batch-details-' + userId);
+    const toggleIcon = headerElement.querySelector('.toggle-icon');
+    
+    if (contentElement.classList.contains('expanded')) {
+        // 접기
+        contentElement.classList.remove('expanded');
+        contentElement.classList.add('collapsed');
+        toggleIcon.classList.add('rotated');
+        toggleIcon.textContent = '▶';
+    } else {
+        // 펼치기
+        contentElement.classList.remove('collapsed');
+        contentElement.classList.add('expanded');
+        toggleIcon.classList.remove('rotated');
+        toggleIcon.textContent = '▼';
+    }
+}
+
+// 페이지 로드 시 모든 배치 세부 정보를 기본적으로 접힌 상태로 설정
+document.addEventListener('DOMContentLoaded', function() {
+    const allBatchDetails = document.querySelectorAll('.batch-details-content');
+    const allToggleIcons = document.querySelectorAll('.toggle-icon');
+    
+    allBatchDetails.forEach(function(content) {
+        content.classList.add('collapsed');
+    });
+    
+    allToggleIcons.forEach(function(icon) {
+        icon.classList.add('rotated');
+        icon.textContent = '▶';
+    });
+});
+</script>
+
+{% endblock %}

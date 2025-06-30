@@ -1,0 +1,659 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <div class="screen">
+        <div class="nav-header">
+            <div class="nav-left">
+                <div class="logo">📊 ImageLabel</div>
+                <div class="breadcrumb">
+                    <span class="breadcrumb-item" onclick="window.location.href='{% url 'dashboard' %)'">대시보드</span>
+                    <span class="breadcrumb-separator">></span>
+                    <span class="breadcrumb-item active">Google Drive</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                <a href="{% url 'dashboard' %}" class="btn btn-small">대시보드</a>
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <h2>Google Drive 이미지 가져오기</h2>
+            <p>Google Drive 폴더에서 이미지를 가져와 라벨링 배치를 생성합니다.</p>
+            {% csrf_token %}
+            
+            <div style="margin: 30px 0;">
+                <div class="drive-setup">
+                    <h3>📁 Google Drive 폴더</h3>
+                    <p>Google Drive 폴더 URL을 입력하세요. 폴더 ID가 자동으로 추출됩니다.</p>
+                    
+                    <div style="margin: 10px 0;">
+                        <input type="text" id="folderUrlInput" placeholder="Google Drive 폴더 URL 입력 (예: https://drive.google.com/drive/folders/1dG3x-csNN1LxaK6FVSC5n28xmIYkiyAo)" 
+                               style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;"
+                               onchange="extractFolderIdFromUrl()">
+                        <input type="hidden" id="folderIdInput">
+                        <div id="folderIdDisplay" style="margin-top: 5px; font-size: 0.9em; color: #666;"></div>
+                    </div>
+                    
+                    <div style="margin: 15px 0;">
+                        <input type="text" id="batchNamePrefix" placeholder="배치 이름 접두사 입력 (예: Medical_Images)" 
+                               style="width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;">
+                    </div>
+                    
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
+                        <h4>배치 분할 설정</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;">분할 방식:</label>
+                                <select id="splitMethod" onchange="toggleSplitOptions()" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;">
+                                    <option value="single">단일 배치</option>
+                                    <option value="by_count">배치당 이미지 개수로 분할</option>
+                                    <option value="by_batches">총 배치 개수로 분할</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 5px; font-weight: 500;" id="splitValueLabel">분할 값:</label>
+                                <input type="number" id="splitValue" min="1" placeholder="100" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px;" disabled>
+                            </div>
+                        </div>
+                        <div id="splitPreview" style="margin-top: 10px; padding: 10px; background: white; border-radius: 6px; font-size: 0.9em; color: #666;"></div>
+                    </div>
+                    
+                    <div style="margin: 20px 0;">
+                        <button onclick="loadFiles()" class="btn">📂 폴더 파일 확인</button>
+                        <button onclick="createBatch()" class="btn" style="background: linear-gradient(135deg, #28a745, #20c997);">🚀 배치 생성하기</button>
+                    </div>
+                    
+                    <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px; font-size: 0.9em;">
+                        <h4>🔍 Google Drive 폴더 ID 찾는 방법:</h4>
+                        <ol>
+                            <li>Google Drive에서 원하는 폴더를 열어주세요</li>
+                            <li>브라우저 주소창에서 URL을 복사하세요</li>
+                            <li>URL 예시: https://drive.google.com/drive/folders/<strong>1dG3x-csNN1LxaK6FVSC5n28xmIYkiyAo</strong></li>
+                            <li>굵게 표시된 부분이 폴더 ID입니다</li>
+                            <li>또는 위의 "URL에서 추출" 버튼을 클릭하여 자동으로 추출할 수 있습니다</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="result"></div>
+        </div>
+    </div>
+</div>
+
+<!-- 로딩 오버레이 -->
+<div id="loadingOverlay" class="loading-overlay" style="display: none;">
+    <div class="loading-content">
+        <div class="loading-spinner">
+            <div class="spinner-circle"></div>
+            <div class="spinner-circle"></div>
+            <div class="spinner-circle"></div>
+        </div>
+        <h3 id="loadingTitle">배치 생성 중...</h3>
+        <p id="loadingMessage">Google Drive에서 이미지를 다운로드하고 있습니다.</p>
+        <div class="loading-progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">0%</div>
+        </div>
+        <div class="loading-steps">
+            <div class="step" id="step1">
+                <span class="step-icon">📂</span>
+                <span class="step-text">폴더 분석</span>
+            </div>
+            <div class="step" id="step2">
+                <span class="step-icon">⬇️</span>
+                <span class="step-text">이미지 다운로드</span>
+            </div>
+            <div class="step" id="step3">
+                <span class="step-icon">📦</span>
+                <span class="step-text">배치 생성</span>
+            </div>
+            <div class="step" id="step4">
+                <span class="step-icon">✅</span>
+                <span class="step-text">완료</span>
+            </div>
+        </div>
+        <div class="loading-details">
+            <div id="loadingDetails">준비 중...</div>
+        </div>
+    </div>
+</div>
+
+<style>
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+.loading-content {
+    background: white;
+    border-radius: 20px;
+    padding: 40px;
+    text-align: center;
+    min-width: 400px;
+    max-width: 500px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideUp {
+    from { 
+        opacity: 0;
+        transform: translateY(30px) scale(0.95);
+    }
+    to { 
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.loading-spinner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 20px;
+    gap: 8px;
+}
+
+.spinner-circle {
+    width: 12px;
+    height: 12px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 50%;
+    animation: bounce 1.4s ease-in-out infinite both;
+}
+
+.spinner-circle:nth-child(1) { animation-delay: -0.32s; }
+.spinner-circle:nth-child(2) { animation-delay: -0.16s; }
+.spinner-circle:nth-child(3) { animation-delay: 0s; }
+
+@keyframes bounce {
+    0%, 80%, 100% {
+        transform: scale(0.8);
+        opacity: 0.5;
+    }
+    40% {
+        transform: scale(1.2);
+        opacity: 1;
+    }
+}
+
+#loadingTitle {
+    font-size: 1.5rem;
+    color: #2c3e50;
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+
+#loadingMessage {
+    color: #7f8c8d;
+    margin-bottom: 25px;
+    font-size: 1rem;
+}
+
+.loading-progress {
+    margin-bottom: 30px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 8px;
+    background: #ecf0f1;
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2ecc71);
+    border-radius: 4px;
+    transition: width 0.5s ease;
+    width: 0%;
+}
+
+.progress-text {
+    font-weight: 600;
+    color: #34495e;
+    font-size: 0.9rem;
+}
+
+.loading-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 25px;
+    padding: 0 10px;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.3;
+    transition: all 0.3s ease;
+    flex: 1;
+}
+
+.step.active {
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.step.completed {
+    opacity: 1;
+}
+
+.step-icon {
+    font-size: 1.2rem;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.step.active .step-icon {
+    background: #3498db;
+    transform: scale(1.1);
+}
+
+.step.completed .step-icon {
+    background: #2ecc71;
+}
+
+.step-text {
+    font-size: 0.8rem;
+    color: #34495e;
+    font-weight: 500;
+}
+
+.loading-details {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 10px;
+    border-left: 4px solid #3498db;
+}
+
+#loadingDetails {
+    font-size: 0.9rem;
+    color: #34495e;
+    text-align: left;
+}
+</style>
+
+<script>
+// 로딩 상태 관리
+let currentStep = 0;
+const steps = ['step1', 'step2', 'step3', 'step4'];
+const stepMessages = [
+    '폴더 구조를 분석하고 있습니다...',
+    '이미지 파일을 다운로드하고 있습니다...',
+    '배치를 생성하고 데이터베이스에 저장하고 있습니다...',
+    '모든 작업이 완료되었습니다!'
+];
+
+function showLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.style.display = 'flex';
+    currentStep = 0;
+    updateLoadingStep(0);
+    updateProgress(0);
+}
+
+function hideLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.style.display = 'none';
+    resetLoadingState();
+}
+
+function updateLoadingStep(stepIndex) {
+    // 이전 단계들을 완료 상태로 표시
+    for (let i = 0; i < stepIndex; i++) {
+        const step = document.getElementById(steps[i]);
+        step.classList.remove('active');
+        step.classList.add('completed');
+    }
+    
+    // 현재 단계를 활성 상태로 표시
+    if (stepIndex < steps.length) {
+        const currentStepElement = document.getElementById(steps[stepIndex]);
+        currentStepElement.classList.add('active');
+        currentStepElement.classList.remove('completed');
+        
+        // 메시지 업데이트
+        document.getElementById('loadingDetails').textContent = stepMessages[stepIndex];
+    }
+    
+    // 다음 단계들을 비활성 상태로 유지
+    for (let i = stepIndex + 1; i < steps.length; i++) {
+        const step = document.getElementById(steps[i]);
+        step.classList.remove('active', 'completed');
+    }
+}
+
+function updateProgress(percentage) {
+    const progressFill = document.getElementById('progressFill');
+    const progressText = document.getElementById('progressText');
+    
+    progressFill.style.width = percentage + '%';
+    progressText.textContent = Math.round(percentage) + '%';
+}
+
+function resetLoadingState() {
+    currentStep = 0;
+    steps.forEach(stepId => {
+        const step = document.getElementById(stepId);
+        step.classList.remove('active', 'completed');
+    });
+    updateProgress(0);
+}
+
+async function loadFiles() {
+    const folderId = document.getElementById('folderIdInput').value.trim();
+    
+    if (!folderId) {
+        alert('폴더 ID를 입력해주세요.');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/drive-folder-files/?folder_id=${encodeURIComponent(folderId)}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            document.getElementById('result').innerHTML = `
+                <div style="color: red; padding: 20px; background: #ffebee; border-radius: 8px; margin: 20px 0;">
+                    <h3>❌ ${data.error}</h3>
+                    <p>Google Drive 인증이 필요합니다.</p>
+                    <button onclick="location.href='/google-drive-auth/'" class="btn">Google Drive 인증하기</button>
+                </div>
+            `;
+        } else {
+            document.getElementById('result').innerHTML = `
+                <div style="color: green; padding: 20px; background: #e8f5e8; border-radius: 8px; margin: 20px 0;">
+                    <h3>✅ ${data.count}개의 이미지 파일 발견</h3>
+                    <div style="max-height: 400px; overflow-y: auto; margin: 10px 0;">
+                        ${data.files.map(file => `
+                            <div style="padding: 8px; border-bottom: 1px solid #ddd;">
+                                <strong>${file.name}</strong><br>
+                                <small>타입: ${file.mimeType} | 크기: ${Math.round(file.size/1024)}KB</small>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button onclick="createBatch()" class="btn" style="margin-top: 10px; background: #28a745;">이 파일들로 배치 생성</button>
+                </div>
+            `;
+        }
+    } catch (error) {
+        alert('오류: ' + error.message);
+    }
+}
+
+async function createBatch() {
+    const folderId = document.getElementById('folderIdInput').value.trim();
+    const batchNamePrefix = document.getElementById('batchNamePrefix').value.trim() || 'Google Drive 배치';
+    const splitMethod = document.getElementById('splitMethod').value;
+    const splitValue = parseInt(document.getElementById('splitValue').value) || 0;
+    
+    if (!folderId) {
+        alert('Google Drive 폴더 URL을 먼저 입력해주세요.');
+        return;
+    }
+    
+    if (splitMethod !== 'single' && splitValue <= 0) {
+        alert('분할 값을 올바르게 입력해주세요.');
+        return;
+    }
+    
+    // 로딩 화면 표시
+    showLoading();
+    
+    try {
+        // 1단계: 폴더 분석
+        updateLoadingStep(0);
+        updateProgress(10);
+        await new Promise(resolve => setTimeout(resolve, 500)); // 시각적 피드백을 위한 지연
+        
+        // 2단계: 이미지 다운로드 및 배치 생성
+        updateLoadingStep(1);
+        updateProgress(30);
+        
+        const formData = new FormData();
+        formData.append('batch_name_prefix', batchNamePrefix);
+        formData.append('split_method', splitMethod);
+        formData.append('split_value', splitValue);
+        formData.append('csrfmiddlewaretoken', getCsrfToken());
+        
+        const response = await fetch(`/drive-folder-files/?folder_id=${encodeURIComponent(folderId)}`, { 
+            method: 'POST', 
+            body: formData 
+        });
+        
+        // 3단계: 배치 생성
+        updateLoadingStep(2);
+        updateProgress(70);
+        await new Promise(resolve => setTimeout(resolve, 1000)); // 처리 시간 시뮬레이션
+        
+        const data = await response.json();
+        
+        // 4단계: 완료
+        updateLoadingStep(3);
+        updateProgress(100);
+        await new Promise(resolve => setTimeout(resolve, 800)); // 완료 상태 표시
+        
+        // 로딩 화면 숨기기
+        hideLoading();
+        
+        if (data.error) {
+            alert('오류: ' + data.error);
+        } else if (data.success) {
+            let resultHtml = `
+                <div style="color: green; padding: 20px; background: #e8f5e8; border-radius: 8px; margin: 20px 0; animation: slideUp 0.5s ease-out;">
+                    <h3>🎉 배치 생성 완료!</h3>
+            `;
+            
+            if (data.batches && data.batches.length > 1) {
+                resultHtml += `<p><strong>생성된 배치 수:</strong> ${data.batches.length}개</p>`;
+                resultHtml += `<div style="max-height: 200px; overflow-y: auto; margin: 10px 0;">`;
+                data.batches.forEach(batch => {
+                    resultHtml += `<div style="padding: 5px; border-bottom: 1px solid #ddd;">
+                        <strong>${batch.name}</strong> - ${batch.image_count}개 이미지
+                    </div>`;
+                });
+                resultHtml += `</div>`;
+            } else {
+                resultHtml += `<p><strong>배치명:</strong> ${data.batch_name || data.batches[0].name}</p>`;
+                resultHtml += `<p><strong>이미지 수:</strong> ${data.image_count || data.batches[0].image_count}개</p>`;
+            }
+            
+            resultHtml += `
+                    <button onclick="location.href='/dashboard/'" class="btn" style="animation: pulse 2s infinite;">대시보드로 이동</button>
+                </div>
+            `;
+            
+            document.getElementById('result').innerHTML = resultHtml;
+            
+            // 성공 시 폭죽 효과 (선택사항)
+            createConfetti();
+        }
+    } catch (error) {
+        hideLoading();
+        alert('오류: ' + error.message);
+    }
+}
+
+// 성공 시 간단한 폭죽 효과
+function createConfetti() {
+    const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7', '#dda0dd'];
+    
+    for (let i = 0; i < 50; i++) {
+        setTimeout(() => {
+            const confetti = document.createElement('div');
+            confetti.style.position = 'fixed';
+            confetti.style.width = '10px';
+            confetti.style.height = '10px';
+            confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+            confetti.style.left = Math.random() * window.innerWidth + 'px';
+            confetti.style.top = '-10px';
+            confetti.style.borderRadius = '50%';
+            confetti.style.pointerEvents = 'none';
+            confetti.style.zIndex = '10000';
+            confetti.style.animation = 'fall 3s linear forwards';
+            
+            document.body.appendChild(confetti);
+            
+            setTimeout(() => {
+                if (confetti.parentNode) {
+                    confetti.parentNode.removeChild(confetti);
+                }
+            }, 3000);
+        }, i * 100);
+    }
+}
+
+// CSS 애니메이션 추가
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes fall {
+        to {
+            transform: translateY(100vh) rotate(360deg);
+            opacity: 0;
+        }
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+`;
+document.head.appendChild(style);
+
+// 페이지 로드 시 이벤트 리스너 추가
+document.addEventListener('DOMContentLoaded', function() {
+    const splitValueInput = document.getElementById('splitValue');
+    if (splitValueInput) {
+        splitValueInput.addEventListener('input', updateSplitPreview);
+    }
+});
+
+function getCsrfToken() {
+    // 1. 쿠키에서 가져오기
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, 10) === 'csrftoken=') {
+                cookieValue = decodeURIComponent(cookie.substring(10));
+                break;
+            }
+        }
+    }
+    
+    // 2. 메타 태그에서 가져오기 (fallback)
+    if (!cookieValue) {
+        const csrfMeta = document.querySelector('[name=csrfmiddlewaretoken]');
+        if (csrfMeta) {
+            cookieValue = csrfMeta.getAttribute('value');
+        }
+    }
+    
+    // 3. hidden input에서 가져오기 (fallback)
+    if (!cookieValue) {
+        const csrfInput = document.querySelector('input[name=csrfmiddlewaretoken]');
+        if (csrfInput) {
+            cookieValue = csrfInput.value;
+        }
+    }
+    
+    return cookieValue;
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// 분할 옵션 토글
+function toggleSplitOptions() {
+    const splitMethod = document.getElementById('splitMethod').value;
+    const splitValue = document.getElementById('splitValue');
+    const splitValueLabel = document.getElementById('splitValueLabel');
+    
+    if (splitMethod === 'single') {
+        splitValue.disabled = true;
+        splitValue.value = '';
+        splitValueLabel.textContent = '분할 값:';
+    } else if (splitMethod === 'by_count') {
+        splitValue.disabled = false;
+        splitValueLabel.textContent = '배치당 이미지 개수:';
+        splitValue.placeholder = '100';
+    } else if (splitMethod === 'by_batches') {
+        splitValue.disabled = false;
+        splitValueLabel.textContent = '총 배치 개수:';
+        splitValue.placeholder = '5';
+    }
+    updateSplitPreview();
+}
+
+// 분할 미리보기 업데이트
+function updateSplitPreview() {
+    const splitMethod = document.getElementById('splitMethod').value;
+    const splitValue = parseInt(document.getElementById('splitValue').value) || 0;
+    const preview = document.getElementById('splitPreview');
+    
+    if (splitMethod === 'single') {
+        preview.textContent = '모든 이미지를 하나의 배치로 생성합니다.';
+    } else if (splitMethod === 'by_count' && splitValue > 0) {
+        preview.textContent = `각 배치마다 최대 ${splitValue}개의 이미지가 포함됩니다.`;
+    } else if (splitMethod === 'by_batches' && splitValue > 0) {
+        preview.textContent = `총 ${splitValue}개의 배치로 이미지를 균등하게 분할합니다.`;
+    } else {
+        preview.textContent = '분할 값을 입력하세요.';
+    }
+}
+
+// 폴더 ID 추출 도우미 함수
+function extractFolderIdFromUrl() {
+    const urlInput = document.getElementById('folderUrlInput').value.trim();
+    if (urlInput) {
+        const match = urlInput.match(/\/folders\/([a-zA-Z0-9-_]+)/);
+        if (match) {
+            document.getElementById('folderIdInput').value = match[1];
+            document.getElementById('folderIdDisplay').textContent = `폴더 ID: ${match[1]}`;
+            document.getElementById('folderIdDisplay').style.color = '#28a745';
+        } else {
+            alert('올바른 Google Drive 폴더 URL이 아닙니다.');
+        }
+    }
+}
+</script>
+{% endblock %} 

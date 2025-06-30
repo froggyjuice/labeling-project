@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이미지 라벨링 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.4.0/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .screen {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        /* 네비게이션 헤더 */
+        .nav-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -moz-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            -moz-text-fill-color: transparent;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb-item {
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .breadcrumb-item:hover {
+            color: #667eea;
+        }
+
+        .breadcrumb-item.active {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .breadcrumb-separator {
+            color: #ccc;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9rem;
+        }
+
+        .home-btn {
+            background: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            text-decoration: none;
+        }
+
+        .home-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #667eea;
+        }
+
+        .dashboard {
+            padding: 40px;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .progress-section {
+            margin-bottom: 30px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
+
+        .batch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .batch-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 0;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s;
+            overflow: hidden;
+        }
+
+        .batch-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .batch-card.completed {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            border-color: #28a745;
+        }
+
+        .batch-thumbnail {
+            height: 150px;
+            overflow: hidden;
+            background: #f0f0f0;
+        }
+
+        .batch-thumbnail img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+
+        .batch-card:hover .batch-thumbnail img {
+            transform: scale(1.05);
+        }
+
+        .batch-content {
+            padding: 20px;
+        }
+
+        /* 라벨링 화면 */
+        .labeling-screen {
+            display: flex;
+            height: 100vh;
+            max-height: 100vh;
+        }
+
+        .image-section {
+            flex: 1;
+            background: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .image-container {
+            max-width: 100%;
+            max-height: 70vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .current-image {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .image-info {
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+        }
+
+        .controls-section {
+            width: 350px;
+            background: white;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border-left: 2px solid #f0f0f0;
+        }
+
+        .label-options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .label-btn {
+            padding: 15px 20px;
+            border: 2px solid #e1e8ed;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            font-size: 1.1rem;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .label-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .label-btn.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .label-btn .hotkey {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .nav-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .nav-btn.prev {
+            background: #6c757d;
+            color: white;
+        }
+
+        .nav-btn.next {
+            background: #28a745;
+            color: white;
+        }
+
+        .nav-btn.skip {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .progress-info {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .hotkey-guide {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .hotkey-guide h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        @media (max-width: 768px) {
+            .labeling-screen {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .controls-section {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 메시지 표시 -->
+    {% if messages %}
+        <div id="messages" style="position: fixed; top: 20px; right: 20px; z-index: 1000;">
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }}" style="background: {% if message.tags == 'success' %}#28a745{% elif message.tags == 'error' %}#dc3545{% else %}#667eea{% endif %}; color: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; max-width: 400px;">
+                    {{ message }}
+                    <button onclick="this.parentElement.remove()" style="float: right; background: none; border: none; color: white; font-size: 20px; cursor: pointer;">&times;</button>
+                </div>
+            {% endfor %}
+        </div>
+        <script>
+            // 메시지 자동 제거 (성공 메시지는 3초, 오류 메시지는 7초)
+            setTimeout(function() {
+                const messages = document.getElementById('messages');
+                if (messages) {
+                    messages.style.transition = 'opacity 0.5s ease-out';
+                    messages.style.opacity = '0';
+                    setTimeout(() => messages.remove(), 500);
+                }
+            }, 3000);
+            
+            // 개별 메시지 클릭 시 즉시 제거
+            document.addEventListener('DOMContentLoaded', function() {
+                const alerts = document.querySelectorAll('.alert');
+                alerts.forEach(alert => {
+                    alert.style.cursor = 'pointer';
+                    alert.addEventListener('click', function() {
+                        this.style.transition = 'opacity 0.3s ease-out';
+                        this.style.opacity = '0';
+                        setTimeout(() => this.remove(), 300);
+                    });
+                });
+            });
+        </script>
+    {% endif %}
+    
+    {% block content %}{% endblock %}
+</body>
+</html>

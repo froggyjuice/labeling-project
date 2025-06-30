@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>이미지 라벨링 시스템</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.4.0/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .screen {
+            display: none;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* 로그인 화면 */
+        .login-screen {
+            text-align: center;
+            padding: 60px 40px;
+        }
+
+        .login-screen h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .user-code-input {
+            width: 100%;
+            max-width: 400px;
+            padding: 15px 20px;
+            font-size: 1.1rem;
+            border: 2px solid #e1e8ed;
+            border-radius: 8px;
+            margin: 20px 0;
+            transition: border-color 0.3s;
+        }
+
+        .user-code-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        /* 대시보드 */
+        .dashboard {
+            padding: 40px;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        /* 네비게이션 헤더 */
+        .nav-header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb-item {
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .breadcrumb-item:hover {
+            color: #667eea;
+        }
+
+        .breadcrumb-item.active {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .breadcrumb-separator {
+            color: #ccc;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .home-btn {
+            background: transparent;
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .home-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .quick-stats {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 3px solid #667eea;
+        }
+
+        .progress-section {
+            margin-bottom: 30px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+        }
+
+        .batch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .batch-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .batch-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+
+        .batch-card.completed {
+            background: linear-gradient(135deg, #d4edda, #c3e6cb);
+            border-color: #28a745;
+        }
+
+        /* 작업 화면 */
+        .labeling-screen {
+            display: flex;
+            height: 100vh;
+            max-height: 100vh;
+        }
+
+        .image-section {
+            flex: 1;
+            background: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .image-container {
+            max-width: 100%;
+            max-height: 70vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .current-image {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .image-info {
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+        }
+
+        .controls-section {
+            width: 350px;
+            background: white;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border-left: 2px solid #f0f0f0;
+        }
+
+        .label-options {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .label-btn {
+            padding: 15px 20px;
+            border: 2px solid #e1e8ed;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            text-align: left;
+            font-size: 1.1rem;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .label-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .label-btn.selected {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .label-btn .hotkey {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .nav-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        .nav-btn.prev {
+            background: #6c757d;
+            color: white;
+        }
+
+        .nav-btn.next {
+            background: #28a745;
+            color: white;
+        }
+
+        .nav-btn.skip {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .nav-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .progress-info {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .hotkey-guide {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .hotkey-guide h4 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 768px) {
+            .labeling-screen {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .controls-section {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 로그인 화면 -->
+        <div id="loginScreen" class="screen active">
+            <div class="login-screen">
+                <h1>이미지 라벨링 시스템</h1>
+                <p>작업을 시작하려면 사용자 코드를 입력하세요</p>
+                <input type="text" id="userCodeInput" class="user-code-input" placeholder="사용자 코드 입력">
+                <br>
+                <button onclick="startLogin()" class="btn">로그인 시작</button>
+            </div>
+        </div>
+
+        <!-- 로딩 화면 -->
+        <div id="loadingScreen" class="screen">
+            <div class="loading">
+                <div class="spinner"></div>
+                <p>Google 계정으로 로그인 중...</p>
+            </div>
+        </div>
+
+        <!-- 대시보드 -->
+        <div id="dashboardScreen" class="screen">
+            <!-- 네비게이션 헤더 -->
+            <div class="nav-header">
+                <div class="nav-left">
+                    <div class="logo" onclick="goHome()">📊 ImageLabel</div>
+                    <div class="breadcrumb">
+                        <span class="breadcrumb-item active">대시보드</span>
+                    </div>
+                </div>
+                <div class="nav-right">
+                    <div class="quick-stats">
+                        <div class="stat-item">
+                            <span>📈</span>
+                            <span id="quickProgress">0% 완료</span>
+                        </div>
+                    </div>
+                    <div class="user-info">
+                        <img id="userAvatar" class="user-avatar" src="" alt="User">
+                        <div>
+                            <div id="userName">사용자</div>
+                            <div id="userEmail" style="font-size: 0.8rem; color: #666;">email@example.com</div>
+                        </div>
+                    </div>
+                    <button onclick="logout()" class="btn" style="padding: 8px 16px; font-size: 0.9rem;">로그아웃</button>
+                </div>
+            </div>
+
+            <div class="dashboard">
+                <div class="progress-section">
+                    <h3>전체 진행률</h3>
+                    <div class="progress-bar">
+                        <div id="overallProgress" class="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <p id="progressText">0 / 0 이미지 완료</p>
+                </div>
+
+                <h3>작업 배치</h3>
+                <div id="batchGrid" class="batch-grid">
+                    <!-- 배치 카드들이 여기에 동적으로 생성됩니다 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 라벨링 화면 -->
+        <div id="labelingScreen" class="screen">
+            <!-- 네비게이션 헤더 -->
+            <div class="nav-header">
+                <div class="nav-left">
+                    <div class="logo" onclick="goHome()">📊 ImageLabel</div>
+                    <div class="breadcrumb">
+                        <span class="breadcrumb-item" onclick="backToDashboard()">대시보드</span>
+                        <span class="breadcrumb-separator">></span>
+                        <span class="breadcrumb-item active" id="breadcrumbBatch">배치 1</span>
+                    </div>
+                </div>
+                <div class="nav-right">
+                    <div class="quick-stats">
+                        <div class="stat-item">
+                            <span>🏷️</span>
+                            <span id="quickImageProgress">1 / 100</span>
+                        </div>
+                        <div class="stat-item">
+                            <span>⏱️</span>
+                            <span id="sessionTimer">00:00</span>
+                        </div>
+                    </div>
+                    <button onclick="goHome()" class="home-btn">
+                        🏠 홈
+                    </button>
+                    <button onclick="backToDashboard()" class="btn" style="padding: 8px 16px; font-size: 0.9rem;">대시보드</button>
+                </div>
+            </div>
+
+            <div class="labeling-screen">
+                <div class="image-section">
+                    <div class="image-container">
+                        <img id="currentImage" class="current-image" src="" alt="Label this image">
+                    </div>
+                    <div class="image-info">
+                        <p id="imageFileName">이미지를 로딩 중...</p>
+                    </div>
+                </div>
+
+                <div class="controls-section">
+                    <div class="progress-info">
+                        <h3 id="batchTitle">배치 1</h3>
+                        <p id="imageProgress">이미지 1 / 100</p>
+                    </div>
+
+                    <div class="label-options">
+                        <button class="label-btn" data-label="positive" onclick="selectLabel('positive')">
+                            긍정적 <span class="hotkey">1</span>
+                        </button>
+                        <button class="label-btn" data-label="negative" onclick="selectLabel('negative')">
+                            부정적 <span class="hotkey">2</span>
+                        </button>
+                        <button class="label-btn" data-label="neutral" onclick="selectLabel('neutral')">
+                            중립적 <span class="hotkey">3</span>
+                        </button>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button class="nav-btn prev" onclick="previousImage()">이전</button>
+                        <button class="nav-btn skip" onclick="skipImage()">보류</button>
+                        <button class="nav-btn next" onclick="nextImage()">다음</button>
+                    </div>
+
+                    <div class="hotkey-guide">
+                        <h4>키보드 단축키</h4>
+                        <p>1, 2, 3: 라벨 선택</p>
+                        <p>Space: 보류</p>
+                        <p>Enter / →: 다음 이미지</p>
+                        <p>←: 이전 이미지</p>
+                        <p>Esc: 대시보드로 돌아가기</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 애플리케이션 상태 관리
+        class AppState {
+            constructor() {
+                this.currentScreen = 'login';
+                this.user = null;
+                this.batches = [];
+                this.currentBatch = null;
+                this.currentImageIndex = 0;
+                this.labels = {};
+                this.googleAuth = null;
+            }
+
+            // 화면 전환
+            switchScreen(screenName) {
+                document.querySelectorAll('.screen').forEach(screen => {
+                    screen.classList.remove('active');
+                });
+                document.getElementById(screenName + 'Screen').classList.add('active');
+                this.currentScreen = screenName;
+            }
+
+            // 사용자 정보 설정
+            setUser(userInfo) {
+                this.user = userInfo;
+                document.getElementById('userName').textContent = userInfo.name;
+                document.getElementById('userEmail').textContent = userInfo.email;
+                document.getElementById('userAvatar').src = userInfo.picture;
+            }
+
+            // 배치 데이터 설정
+            setBatches(batches) {
+                this.batches = batches;
+                this.renderBatches();
+                this.updateOverallProgress();
+            }
+
+            // 배치 렌더링
+            renderBatches() {
+                const grid = document.getElementById('batchGrid');
+                grid.innerHTML = '';
+                
+                this.batches.forEach((batch, index) => {
+                    const card = document.createElement('div');
+                    card.className = `batch-card ${batch.completed ? 'completed' : ''}`;
+                    card.innerHTML = `
+                        <h4>배치 ${index + 1}</h4>
+                        <p>${batch.completed ? batch.images.length : batch.progress} / ${batch.images.length} 완료</p>
+                        <p>${batch.completed ? '완료됨' : '진행 중'}</p>
+                    `;
+                    card.onclick = () => this.startBatch(index);
+                    grid.appendChild(card);
+                });
+            }
+
+            // 전체 진행률 업데이트
+            updateOverallProgress() {
+                const totalImages = this.batches.reduce((acc, batch) => acc + batch.images.length, 0);
+                const completedImages = this.batches.reduce((acc, batch) => 
+                    acc + (batch.completed ? batch.images.length : batch.progress), 0);
+                
+                const percentage = totalImages > 0 ? (completedImages / totalImages) * 100 : 0;
+                
+                document.getElementById('overallProgress').style.width = `${percentage}%`;
+                document.getElementById('progressText').textContent = `${completedImages} / ${totalImages} 이미지 완료`;
+            }
+
+            // 배치 시작
+            startBatch(batchIndex) {
+                this.currentBatch = this.batches[batchIndex];
+                this.currentBatchIndex = batchIndex;
+                this.currentImageIndex = this.currentBatch.progress || 0;
+                
+                document.getElementById('batchTitle').textContent = `배치 ${batchIndex + 1}`;
+                document.getElementById('breadcrumbBatch').textContent = `배치 ${batchIndex + 1}`;
+                this.loadCurrentImage();
+                this.switchScreen('labeling');
+                this.startSessionTimer();
+            }
+
+            // 세션 타이머 시작
+            startSessionTimer() {
+                this.sessionStartTime = Date.now();
+                this.updateSessionTimer();
+                this.sessionTimerInterval = setInterval(() => {
+                    this.updateSessionTimer();
+                }, 1000);
+            }
+
+            // 세션 타이머 업데이트
+            updateSessionTimer() {
+                if (!this.sessionStartTime) return;
+                
+                const elapsed = Math.floor((Date.now() - this.sessionStartTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                
+                document.getElementById('sessionTimer').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            // 세션 타이머 정지
+            stopSessionTimer() {
+                if (this.sessionTimerInterval) {
+                    clearInterval(this.sessionTimerInterval);
+                    this.sessionTimerInterval = null;
+                }
+                this.sessionStartTime = null;
+            }
+
+            // 현재 이미지 로드
+            loadCurrentImage() {
+                if (!this.currentBatch || this.currentImageIndex >= this.currentBatch.images.length) {
+                    return;
+                }
+
+                const image = this.currentBatch.images[this.currentImageIndex];
+                document.getElementById('currentImage').src = image.url;
+                document.getElementById('imageFileName').textContent = image.name;
+                document.getElementById('imageProgress').textContent = 
+                    `이미지 ${this.currentImageIndex + 1} / ${this.currentBatch.images.length}`;
+
+                // 이전에 선택된 라벨이 있다면 표시
+                this.showCurrentLabel();
+            }
+
+            // 현재 라벨 표시
+            showCurrentLabel() {
+                const imageId = this.getCurrentImageId();
+                const currentLabel = this.labels[imageId];
+                
+                document.querySelectorAll('.label-btn').forEach(btn => {
+                    btn.classList.remove('selected');
+                    if (currentLabel && btn.dataset.label === currentLabel) {
+                        btn.classList.add('selected');
+                    }
+                });
+            }
+
+            // 현재 이미지 ID 가져오기
+            getCurrentImageId() {
+                if (!this.currentBatch || this.currentImageIndex >= this.currentBatch.images.length) {
+                    return null;
+                }
+                return this.currentBatch.images[this.currentImageIndex].id;
+            }
+
+            // 라벨 선택
+            selectLabel(label) {
+                const imageId = this.getCurrentImageId();
+                if (imageId) {
+                    this.labels[imageId] = label;
+                    this.showCurrentLabel();
+                    this.saveProgress();
+                }
+            }
+
+            // 다음 이미지로 이동
+            nextImage() {
+                if (this.currentImageIndex < this.currentBatch.images.length - 1) {
+                    this.currentImageIndex++;
+                    this.loadCurrentImage();
+                } else {
+                    // 배치 완료
+                    this.currentBatch.completed = true;
+                    this.currentBatch.progress = this.currentBatch.images.length;
+                    alert('배치가 완료되었습니다!');
+                    this.switchScreen('dashboard');
+                    this.updateOverallProgress();
+                    this.renderBatches();
+                }
+            }
+
+            // 이전 이미지로 이동
+            previousImage() {
+                if (this.currentImageIndex > 0) {
+                    this.currentImageIndex--;
+                    this.loadCurrentImage();
+                }
+            }
+
+            // 이미지 건너뛰기
+            skipImage() {
+                const imageId = this.getCurrentImageId();
+                if (imageId) {
+                    delete this.labels[imageId];
+                    this.showCurrentLabel();
+                }
+            }
+
+            // 진행률 저장 (실제 API 연동)
+            async saveProgress() {
+                if (this.currentBatch && this.user) {
+                    this.currentBatch.progress = Math.max(this.currentImageIndex, this.currentBatch.progress || 0);
+                    
+                    // 실제 구현에서는 서버에 저장
+                    const saveData = {
+                        userId: this.user.userId,
+                        batchId: this.currentBatch.id,
+                        labels: this.labels,
+                        currentIndex: this.currentImageIndex,
+                        timestamp: new Date().toISOString()
+                    };
+
+                    try {
+                        // 서버에 진행률 저장
+                        const response = await fetch('/api/labeling/save-progress', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(saveData)
+                        }).catch(() => ({ ok: false })); // 데모에서는 에러 시 계속 진행
+
+                        if (response.ok) {
+                            console.log('Progress saved to server');
+                        } else {
+                            console.log('Failed to save to server, using local storage');
+                        }
+                        
+                        // 로컬 백업 저장 (데모용)
+                        console.log('Progress saved locally:', saveData);
+                        
+                    } catch (error) {
+                        console.error('Save error:', error);
+                        // 에러 시 로컬에만 저장
+                        console.log('Saved locally due to error');
+                    }
+                }
+            }
+
+            // 진행률 로드 (실제 API 연동)
+            async loadProgress(batchId) {
+                if (!this.user) return;
+
+                try {
+                    const response = await fetch(`/api/labeling/load-progress/${this.user.userId}/${batchId}`)
+                        .catch(() => ({ ok: false }));
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.labels = { ...this.labels, ...data.labels };
+                        return data.currentIndex || 0;
+                    }
+                } catch (error) {
+                    console.error('Load progress error:', error);
+                }
+                
+                return 0; // 기본값
+            }
+        }
+
+        // 전역 상태 객체
+        const appState = new AppState();
+
+        // Google OAuth 설정
+        const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID'; // 실제 클라이언트 ID로 교체 필요
+
+        // 로그인 시작
+        async function startLogin() {
+            const userCode = document.getElementById('userCodeInput').value.trim();
+            if (!userCode) {
+                alert('사용자 코드를 입력해주세요.');
+                return;
+            }
+
+            appState.switchScreen('loading');
+
+            try {
+                // 실제 Google OAuth 구현이 필요한 부분
+                // 현재는 데모용 데이터로 대체
+                await simulateGoogleAuth(userCode);
+            } catch (error) {
+                console.error('Login failed:', error);
+                alert('로그인에 실패했습니다.');
+                appState.switchScreen('login');
+            }
+        }
+
+        // 실제 Google 인증 및 API 연동
+        async function simulateGoogleAuth(userCode) {
+            try {
+                // 실제 구현에서는 아래와 같이 진행됩니다:
+                /*
+                // 1. Google OAuth 초기화
+                const authManager = new GoogleAuthManager();
+                await authManager.initialize();
+                
+                // 2. 사용자 로그인
+                const userInfo = await authManager.signIn(userCode);
+                appState.setUser(userInfo);
+                
+                // 3. 사용자별 배치 데이터 로드
+                const response = await fetch(`/api/labeling/batches/${userInfo.userId}`);
+                const batches = await response.json();
+                
+                // 4. 각 배치의 진행률 복원
+                for (let batch of batches) {
+                    const progressResponse = await fetch(`/api/labeling/load-progress/${userInfo.userId}/${batch.id}`);
+                    const progress = await progressResponse.json();
+                    batch.progress = progress.currentIndex;
+                    batch.completed = progress.currentIndex >= batch.images.length;
+                }
+                
+                appState.setBatches(batches);
+                */
+
+                // 현재는 데모용 시뮬레이션
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // API 검증 시뮬레이션
+                const validationResponse = await fetch('/api/validate-user', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        userCode: userCode,
+                        email: 'demo@example.com'
+                    })
+                }).catch(() => ({ ok: false })); // 데모에서는 실패해도 계속 진행
+
+                // 사용자 정보 설정 (데모용)
+                appState.setUser({
+                    name: '김개발자',
+                    email: 'developer@example.com',
+                    picture: 'https://via.placeholder.com/50',
+                    userId: 'demo_user_id'
+                });
+
+                // 샘플 배치 데이터 생성 (실제로는 서버에서 가져옴)
+                const sampleBatches = await generateSampleBatches();
+                appState.setBatches(sampleBatches);
+                appState.switchScreen('dashboard');
+
+            } catch (error) {
+                console.error('인증 실패:', error);
+                throw error;
+            }
+        }
+
+        // 샘플 배치 생성 함수
+        async function generateSampleBatches() {
+            const sampleBatches = [];
+            for (let i = 0; i < 5; i++) {
+                const images = [];
+                for (let j = 0; j < 100; j++) {
+                    images.push({
+                        id: `batch_${i}_image_${j}`,
+                        name: `이미지_${i + 1}_${j + 1}.jpg`,
+                        url: `https://picsum.photos/600/400?random=${i * 100 + j}`,
+                        driveFileId: `drive_file_${i}_${j}`
+                    });
+                }
+                
+                sampleBatches.push({
+                    id: `batch_${i}`,
+                    images: images,
+                    progress: i === 0 ? 25 : 0,
+                    completed: false
+                });
+            }
+            return sampleBatches;
+        }
+
+        // 라벨 선택
+        function selectLabel(label) {
+            appState.selectLabel(label);
+        }
+
+        // 네비게이션 함수들
+        function nextImage() {
+            appState.nextImage();
+        }
+
+        function previousImage() {
+            appState.previousImage();
+        }
+
+        function skipImage() {
+            appState.skipImage();
+        }
+
+        function backToDashboard() {
+            appState.stopSessionTimer();
+            appState.switchScreen('dashboard');
+        }
+
+        function goHome() {
+            if (appState.currentScreen === 'labeling') {
+                if (confirm('작업 중인 내용이 저장되지 않을 수 있습니다. 홈으로 이동하시겠습니까?')) {
+                    appState.stopSessionTimer();
+                    appState.switchScreen('dashboard');
+                }
+            } else {
+                appState.switchScreen('dashboard');
+            }
+        }
+
+        function logout() {
+            let confirmMessage = '로그아웃하시겠습니까?';
+            if (appState.currentScreen === 'labeling') {
+                confirmMessage = '작업 중인 내용이 저장되지 않을 수 있습니다. 로그아웃하시겠습니까?';
+            }
+            
+            if (confirm(confirmMessage)) {
+                appState.stopSessionTimer();
+                appState.switchScreen('login');
+                document.getElementById('userCodeInput').value = '';
+                
+                // 상태 초기화
+                appState.user = null;
+                appState.batches = [];
+                appState.currentBatch = null;
+                appState.labels = {};
+            }
+        }
+
+        // 키보드 단축키 처리
+        document.addEventListener('keydown', (event) => {
+            if (appState.currentScreen !== 'labeling') return;
+
+            switch(event.key) {
+                case '1':
+                    selectLabel('positive');
+                    break;
+                case '2':
+                    selectLabel('negative');
+                    break;
+                case '3':
+                    selectLabel('neutral');
+                    break;
+                case ' ':
+                    event.preventDefault();
+                    skipImage();
+                    break;
+                case 'Enter':
+                case 'ArrowRight':
+                    event.preventDefault();
+                    nextImage();
+                    break;
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    previousImage();
+                    break;
+                case 'Escape':
+                    event.preventDefault();
+                    if (confirm('대시보드로 돌아가시겠습니까?')) {
+                        backToDashboard();
+                    }
+                    break;
+            }
+        });
+
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('이미지 라벨링 애플리케이션이 시작되었습니다.');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <div class="screen">
+        <!-- 네비게이션 헤더 -->
+        <div class="nav-header">
+            <div class="nav-left">
+                <div class="logo">📊 ImageLabel</div>
+                <div class="breadcrumb">
+                    <span class="breadcrumb-item active">대시보드</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                {% if user.is_authenticated %}
+                    <div class="user-info">
+                        <div>
+                            <div>{{ user.username }}</div>
+                            <div style="font-size: 0.8rem; color: #666;">{{ user.email|default:"" }}</div>
+                        </div>
+                    </div>
+                    <!-- 메시지 관련 버튼들 -->
+                    <a href="{% url 'user_messages' %}" class="btn btn-small" style="background: #6c757d;">
+                        💬 내 메시지
+                    </a>
+                    <button onclick="openMessageModal('global')" class="btn btn-small" style="background: #17a2b8;">
+                        📧 문의하기
+                    </button>
+                    {% if user.role == 'admin' %}
+                    <a href="{% url 'drive_import' %}" class="btn btn-small">Google Drive</a>
+                    {% endif %}
+                    <a href="{% url 'logout' %}" class="btn btn-small">로그아웃</a>
+                {% else %}
+                    <a href="{% url 'login' %}" class="btn btn-small">로그인</a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <div class="progress-section">
+                <h3>전체 진행률</h3>
+                <div class="progress-bar">
+                    <div id="overallProgress" class="progress-fill" style="width: {{ overall_progress }}%"></div>
+                </div>
+                <p>{{ completed_images }} / {{ total_images }} 이미지 완료</p>
+            </div>
+
+            <h3>작업 배치</h3>
+            <div class="batch-grid">
+                {% if batches %}
+                    {% for batch in batches %}
+                    <div class="batch-card {% if batch.is_completed %}completed{% endif %}">
+                        {% if batch.thumbnail_url %}
+                        <div class="batch-thumbnail">
+                            <img src="{{ batch.thumbnail_url }}" alt="배치 썸네일" loading="lazy">
+                        </div>
+                        {% endif %}
+                        <div class="batch-content" onclick="location.href='{% url 'labeling' batch.id %}'">
+                        <h4>{{ batch.name }}</h4>
+                        <p>{{ batch.completed_images }} / {{ batch.total_images }} 완료</p>
+                        <p>{% if batch.is_completed %}✅ 완료됨{% else %}🔄 진행 중{% endif %}</p>
+                        <div style="margin-top: 10px;">
+                            <div class="progress-bar" style="height: 8px;">
+                                <div class="progress-fill" style="width: {{ batch.progress_percentage }}%"></div>
+                            </div>
+                            </div>
+                        </div>
+                        <!-- 배치별 메시지 버튼 -->
+                        <div class="batch-message-btn" 
+                             data-batch-id="{{ batch.id }}" 
+                             data-batch-name="{{ batch.name }}"
+                             onclick="event.stopPropagation(); openBatchMessage(this);" 
+                             title="이 배치에 대해 문의하기">
+                            💬
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #666;">
+                        <h3>배치가 없습니다</h3>
+                        <p>관리자가 배치를 생성할 때까지 기다려주세요.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 메시지 작성 모달 -->
+<div id="messageModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle">관리자에게 문의하기</h3>
+            <span class="close" onclick="closeMessageModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="messageForm">
+                <input type="hidden" id="messageType" value="">
+                <input type="hidden" id="batchId" value="">
+                
+                <div class="form-group">
+                    <label for="messageSubject">제목</label>
+                    <input type="text" id="messageSubject" maxlength="200" placeholder="문의 제목을 입력하세요" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="messageContent">내용</label>
+                    <textarea id="messageContent" rows="6" maxlength="2000" placeholder="문의 내용을 자세히 입력해주세요&#10;&#10;• 어떤 문제가 있나요?&#10;• 언제 발생했나요?&#10;• 어떤 도움이 필요한가요?" required></textarea>
+                    <div class="char-count">
+                        <span id="charCount">0</span>/2000
+                    </div>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" onclick="closeMessageModal()" class="btn btn-secondary">취소</button>
+                    <button type="submit" class="btn btn-primary">전송</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+/* 배치 카드 메시지 버튼 스타일 */
+.batch-card {
+    position: relative;
+}
+
+.batch-message-btn {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 30px;
+    height: 30px;
+    background: rgba(23, 162, 184, 0.9);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 14px;
+    color: white;
+    transition: all 0.2s ease;
+    z-index: 10;
+}
+
+.batch-message-btn:hover {
+    background: rgba(23, 162, 184, 1);
+    transform: scale(1.1);
+}
+
+/* 모달 스타일 */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 0;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h3 {
+    margin: 0;
+    color: #333;
+}
+
+.close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #000;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #333;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0,123,255,.25);
+}
+
+.char-count {
+    text-align: right;
+    font-size: 12px;
+    color: #666;
+    margin-top: 5px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-secondary:hover {
+    background: #5a6268;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+</style>
+
+<script>
+// 전역 애플리케이션 상태
+const appState = {
+    user: {
+        name: "{{ user.username|default_if_none:'사용자' }}",
+        email: "{{ user.email|default_if_none:'' }}"
+    },
+    batches: [],
+    labels: {},
+    
+    // Google Drive 연동 확인
+    checkGoogleDriveAuth: async function() {
+        try {
+            const response = await fetch('/drive-folder-files/');
+            if (!response.ok) {
+                console.log('Google Drive 인증이 필요합니다.');
+            }
+        } catch (error) {
+            console.log('Google Drive 연결 확인 중 오류:', error);
+        }
+    }
+};
+
+// 메시지 모달 관련 함수들
+function openMessageModal(type, batchId = null, batchName = null) {
+    const modal = document.getElementById('messageModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const messageType = document.getElementById('messageType');
+    const batchIdInput = document.getElementById('batchId');
+    
+    // 폼 초기화
+    document.getElementById('messageForm').reset();
+    document.getElementById('charCount').textContent = '0';
+    
+    if (type === 'global') {
+        modalTitle.textContent = '관리자에게 문의하기';
+        messageType.value = 'global';
+        batchIdInput.value = '';
+    } else if (type === 'batch') {
+        modalTitle.textContent = '배치 "' + batchName + '"에 대한 문의';
+        messageType.value = 'batch';
+        batchIdInput.value = batchId;
+    }
+    
+    modal.style.display = 'block';
+    document.getElementById('messageSubject').focus();
+}
+
+function closeMessageModal() {
+    document.getElementById('messageModal').style.display = 'none';
+}
+
+function openBatchMessage(element) {
+    const batchId = element.getAttribute('data-batch-id');
+    const batchName = element.getAttribute('data-batch-name');
+    openMessageModal('batch', batchId, batchName);
+}
+
+// 글자 수 카운터
+document.addEventListener('DOMContentLoaded', function() {
+    const messageContent = document.getElementById('messageContent');
+    const charCount = document.getElementById('charCount');
+    
+    if (messageContent && charCount) {
+        messageContent.addEventListener('input', function() {
+            charCount.textContent = this.value.length;
+            if (this.value.length > 1800) {
+                charCount.style.color = '#dc3545';
+            } else {
+                charCount.style.color = '#666';
+            }
+        });
+    }
+    
+    // 메시지 폼 제출
+    const messageForm = document.getElementById('messageForm');
+    if (messageForm) {
+        messageForm.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                message_type: document.getElementById('messageType').value,
+                subject: document.getElementById('messageSubject').value.trim(),
+                content: document.getElementById('messageContent').value.trim(),
+                batch_id: document.getElementById('batchId').value || null
+            };
+            
+            if (!formData.subject || !formData.content) {
+                alert('제목과 내용을 모두 입력해주세요.');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/send-message/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCookie('csrftoken')
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert(result.message);
+                    closeMessageModal();
+                } else {
+                    alert(result.error || '메시지 전송에 실패했습니다.');
+                }
+            } catch (error) {
+                alert('오류가 발생했습니다: ' + error.message);
+            }
+        });
+    }
+    
+    appState.checkGoogleDriveAuth();
+    
+    // 배치 카드 클릭 이벤트 최적화
+    document.querySelectorAll('.batch-content').forEach(card => {
+        card.addEventListener('click', function(e) {
+            if (this.onclick) {
+                this.onclick();
+            }
+        });
+    });
+});
+
+// 모달 외부 클릭 시 닫기
+window.onclick = function(event) {
+    const modal = document.getElementById('messageModal');
+    if (event.target === modal) {
+        closeMessageModal();
+    }
+}
+
+// CSRF 토큰 가져오기
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// 키보드 단축키
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'r' && event.ctrlKey) {
+        event.preventDefault();
+        location.reload();
+    }
+    
+    // ESC 키로 모달 닫기
+    if (event.key === 'Escape') {
+        closeMessageModal();
+    }
+});
+</script>
+{% endblock %} 

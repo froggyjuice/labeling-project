@@ -1,0 +1,41 @@
+# Django 및 핵심 의존성
+Django>=5.2.0
+django-extensions>=4.1.0
+python-dotenv
+
+# 데이터베이스
+psycopg2-binary  # PostgreSQL 어댑터
+
+# 웹 서버
+gunicorn>=22.0.0
+whitenoise>=6.0.0  # 정적 파일 서빙
+
+# 캐시 및 세션
+redis>=5.0.0
+django-redis>=5.0.0
+
+# Google OAuth
+google-auth>=2.0.0
+google-auth-oauthlib>=1.0.0
+google-auth-httplib2>=0.2.0
+google-api-python-client>=2.0.0
+
+# 보안 및 모니터링
+django-csp>=3.7.0  # Content Security Policy
+django-ratelimit>=3.0.0  # Rate limiting
+sentry-sdk[django]>=1.0.0  # 에러 모니터링 (선택사항)
+
+# 이미지 처리
+Pillow>=10.0.0
+
+# SSL/TLS
+pyOpenSSL>=25.0.0
+cryptography>=45.0.0
+
+# 유틸리티
+requests>=2.31.0
+urllib3>=2.0.0
+
+# 클라우드 스토리지 (미디어 파일용)
+boto3>=1.26.0
+django-storages>=1.13.0 

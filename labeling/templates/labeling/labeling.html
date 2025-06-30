@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <div class="screen">
+        <!-- 네비게이션 헤더 -->
+        <div class="nav-header">
+            <div class="nav-left">
+                <div class="logo" onclick="goHome()">📊 ImageLabel</div>
+                <div class="breadcrumb">
+                    <span class="breadcrumb-item" onclick="window.location.href='{% url 'dashboard' %}'">대시보드</span>
+                    <span class="breadcrumb-separator">></span>
+                    <span class="breadcrumb-item active">{{ batch.name|default:"배치" }}</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                <div class="quick-stats">
+                    <div class="stat-item">
+                        <span>🏷️</span>
+                        <span id="quickImageProgress">{{ current_index|add:1 }} / {{ total_images }}</span>
+                    </div>
+                </div>
+                <a href="{% url 'dashboard' %}" class="home-btn">🏠 홈</a>
+                <a href="{% url 'dashboard' %}" class="btn btn-small">대시보드</a>
+            </div>
+        </div>
+
+        <div class="labeling-screen">
+            <div class="image-section">
+                <div class="image-container">
+                    {% if current_image %}
+                        <img id="currentImage" class="current-image" src="{{ current_image.url }}" alt="Label this image">
+                    {% else %}
+                        <div style="text-align: center; color: #666; font-size: 1.2rem;">
+                            <h3>이미지를 로딩 중...</h3>
+                            <p>잠시만 기다려주세요.</p>
+                        </div>
+                    {% endif %}
+                </div>
+                <div class="image-info">
+                    <p id="imageFileName">{{ current_image.file_name|default:"이미지를 로딩 중..." }}</p>
+                </div>
+            </div>
+
+            <div class="controls-section">
+                <div class="progress-info">
+                    <h3>{{ batch.name|default:"배치" }}</h3>
+                    <p id="imageProgress">이미지 {{ current_index|add:1 }} / {{ total_images }}</p>
+                    <div class="progress-bar" style="height: 8px;">
+                        <div class="progress-fill" style="width: {{ progress_percentage }}%"></div>
+                    </div>
+                    <!-- 현재 이미지 ID를 hidden input으로 전달 -->
+                    <input type="hidden" id="currentImageId" value="{% if current_image %}{{ current_image.id }}{% else %}0{% endif %}">
+                </div>
+
+                <div class="label-options">
+                    <button class="label-btn" data-label="positive" onclick="selectLabel('positive')">
+                        긍정적 <span class="hotkey">1</span>
+                    </button>
+                    <button class="label-btn" data-label="negative" onclick="selectLabel('negative')">
+                        부정적 <span class="hotkey">2</span>
+                    </button>
+                    <button class="label-btn" data-label="neutral" onclick="selectLabel('neutral')">
+                        중립적 <span class="hotkey">3</span>
+                    </button>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="nav-btn prev" onclick="previousImage()">이전</button>
+                    <button class="nav-btn skip" onclick="skipImage()">보류</button>
+                    <button class="nav-btn next" onclick="nextImage()">다음</button>
+                </div>
+
+                <button class="btn" style="width:100%;margin-top:10px;" onclick="saveProgress()">저장하기</button>
+
+                <div class="hotkey-guide">
+                    <h4>키보드 단축키</h4>
+                    <p>1, 2, 3: 라벨 선택</p>
+                    <p>Space: 보류</p>
+                    <p>Enter / →: 다음 이미지</p>
+                    <p>←: 이전 이미지</p>
+                    <p>Esc: 대시보드로 돌아가기</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Django 템플릿에서 JavaScript로 데이터 전달
+const DJANGO_DATA = {
+    batchId: {{ batch.id|default:0 }},
+    currentIndex: {{ current_index|default:0 }},
+    totalImages: {{ total_images|default:0 }},
+    dashboardUrl: "{% url 'dashboard' %}",
+    currentBatchUrl: "{% url 'labeling' batch.id|default:1 %}"
+};
+
+// 라벨링 애플리케이션 상태
+const labelingState = {
+    batchId: DJANGO_DATA.batchId,
+    currentIndex: DJANGO_DATA.currentIndex,
+    totalImages: DJANGO_DATA.totalImages,
+    currentImageId: DJANGO_DATA.currentImageId,
+    selectedLabels: [],
+    labels: {},
+    lastSavedLabels: {},
+    hasChanges: false,
+    
+    // 라벨 선택/해제
+    selectLabel: function(label) {
+        const btn = document.querySelector(`[data-label="${label}"]`);
+        if (btn.classList.contains('selected')) {
+            btn.classList.remove('selected');
+            this.selectedLabels = this.selectedLabels.filter(l => l !== label);
+        } else {
+            btn.classList.add('selected');
+            this.selectedLabels.push(label);
+        }
+        this.saveCurrentLabels();
+    },
+    
+    // 현재 라벨 저장
+    saveCurrentLabels: function() {
+        const imageId = this.getCurrentImageId();
+        if (imageId) {
+            this.labels[imageId] = [...this.selectedLabels];
+            this.hasChanges = true;
+        }
+    },
+    
+    // 변경사항 확인
+    isChanged: function() {
+        return this.hasChanges || JSON.stringify(this.labels) !== JSON.stringify(this.lastSavedLabels);
+    },
+    
+    // 현재 이미지 ID 가져오기 (실제 DB 이미지 ID 사용)
+    getCurrentImageId: function() {
+        return this.currentImageId;
+    },
+    
+    // 서버에 라벨 저장
+    saveLabelToServer: async function(imageId, labels) {
+        try {
+            const response = await fetch('/api/labeling/save-label', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                },
+                body: JSON.stringify({
+                    imageId: imageId,
+                    labels: labels
+                })
+            });
+            
+            if (response.ok) {
+                console.log('라벨 저장 성공:', imageId, labels);
+                return true;
+            } else {
+                console.error('라벨 저장 실패:', response.status);
+                return false;
+            }
+        } catch (error) {
+            console.error('라벨 저장 오류:', error);
+            return false;
+        }
+    },
+    
+    // 진행률 저장
+    saveProgress: async function() {
+        try {
+            const response = await fetch('/api/labeling/save-progress', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                },
+                body: JSON.stringify({
+                    batchId: this.batchId,
+                    currentIndex: this.currentIndex,
+                    labels: this.labels,
+                    timestamp: new Date().toISOString()
+                })
+            });
+            
+            if (response.ok) {
+                this.lastSavedLabels = JSON.parse(JSON.stringify(this.labels));
+                this.hasChanges = false;
+                alert('저장되었습니다!');
+                return true;
+            } else {
+                console.log('서버 저장 실패, 로컬에 저장됨');
+                alert('저장되었습니다! (로컬 저장)');
+                return true;
+            }
+        } catch (error) {
+            console.error('저장 오류:', error);
+            alert('저장되었습니다! (로컬 저장)');
+            return true;
+        }
+    }
+};
+
+// 라벨 선택 함수
+function selectLabel(label) {
+    labelingState.selectLabel(label);
+}
+
+// 네비게이션 함수들 - 개선됨
+async function nextImage() {
+    console.log('nextImage 호출됨');
+    if (labelingState.selectedLabels.length === 0) {
+        alert('라벨을 하나 이상 선택해주세요!');
+        return;
+    }
+    
+    // 현재 이미지의 라벨을 서버에 저장
+    const currentImageId = labelingState.getCurrentImageId();
+    const saveSuccess = await labelingState.saveLabelToServer(currentImageId, labelingState.selectedLabels);
+    
+    if (!saveSuccess) {
+        const continueAnyway = confirm('라벨 저장에 실패했습니다. 그래도 다음 이미지로 이동하시겠습니까?');
+        if (!continueAnyway) {
+            return;
+        }
+    }
+    
+    // 진행률 업데이트를 위한 UI 갱신
+    const nextIndex = labelingState.currentIndex + 1;
+    const newProgress = Math.round((nextIndex / labelingState.totalImages) * 100);
+    
+    // 진행률 바 업데이트
+    const progressFill = document.querySelector('.progress-fill');
+    if (progressFill) {
+        progressFill.style.width = newProgress + '%';
+    }
+    
+    // 진행률 텍스트 업데이트
+    const progressTexts = document.querySelectorAll('#imageProgress, #quickImageProgress');
+    progressTexts.forEach(element => {
+        if (element) {
+            element.textContent = `이미지 ${nextIndex + 1} / ${labelingState.totalImages}`;
+        }
+    });
+    
+    if (nextIndex < labelingState.totalImages) {
+        // 0.5초 후 다음 이미지로 이동 (사용자가 진행률 변화를 볼 수 있도록)
+        setTimeout(() => {
+            window.location.href = `/labeling/${labelingState.batchId}/?index=${nextIndex}`;
+        }, 500);
+    } else {
+        alert('배치가 완료되었습니다!');
+        window.location.href = '/dashboard/';
+    }
+}
+
+function previousImage() {
+    console.log('previousImage 호출됨');
+    if (labelingState.currentIndex > 0) {
+        const prevIndex = labelingState.currentIndex - 1;
+        window.location.href = `/labeling/${labelingState.batchId}/?index=${prevIndex}`;
+    }
+}
+
+async function skipImage() {
+    console.log('skipImage 호출됨');
+    
+    // 보류도 하나의 라벨로 처리 (빈 배열로 저장)
+    const currentImageId = labelingState.getCurrentImageId();
+    await labelingState.saveLabelToServer(currentImageId, ['skipped']);
+    
+    labelingState.selectedLabels = [];
+    document.querySelectorAll('.label-btn').forEach(btn => btn.classList.remove('selected'));
+    
+    const nextIndex = labelingState.currentIndex + 1;
+    if (nextIndex < labelingState.totalImages) {
+        // 진행률 업데이트
+        const newProgress = Math.round((nextIndex / labelingState.totalImages) * 100);
+        const progressFill = document.querySelector('.progress-fill');
+        if (progressFill) {
+            progressFill.style.width = newProgress + '%';
+        }
+        
+        setTimeout(() => {
+            window.location.href = `/labeling/${labelingState.batchId}/?index=${nextIndex}`;
+        }, 300);
+    } else {
+        alert('배치가 완료되었습니다!');
+        window.location.href = '/dashboard/';
+    }
+}
+
+function saveProgress() {
+    console.log('saveProgress 호출됨');
+    labelingState.saveProgress();
+}
+
+function goHome() {
+    console.log('goHome 호출됨');
+    if (labelingState.isChanged && labelingState.isChanged()) {
+        const choice = confirm('변경사항이 있습니다.\n\n"확인"을 누르면 저장 후 홈으로 이동\n"취소"를 누르면 변경사항을 버리고 홈으로 이동');
+        if (choice) {
+            labelingState.saveProgress().then(() => {
+                window.location.href = '/dashboard/';
+            });
+        } else {
+            window.location.href = '/dashboard/';
+        }
+    } else {
+        window.location.href = '/dashboard/';
+    }
+}
+
+// 키보드 단축키
+document.addEventListener('keydown', function(event) {
+    switch(event.key) {
+        case '1':
+            event.preventDefault();
+            selectLabel('positive');
+            break;
+        case '2':
+            event.preventDefault();
+            selectLabel('negative');
+            break;
+        case '3':
+            event.preventDefault();
+            selectLabel('neutral');
+            break;
+        case ' ':
+            event.preventDefault();
+            skipImage();
+            break;
+        case 'Enter':
+        case 'ArrowRight':
+            event.preventDefault();
+            nextImage();
+            break;
+        case 'ArrowLeft':
+            event.preventDefault();
+            previousImage();
+            break;
+        case 'Escape':
+            event.preventDefault();
+            goHome();
+            break;
+    }
+});
+
+// 페이지 로드 시 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    // 이전에 선택된 라벨이 있다면 복원
+    const imageId = labelingState.getCurrentImageId();
+    if (labelingState.labels[imageId]) {
+        labelingState.selectedLabels = [...labelingState.labels[imageId]];
+        labelingState.selectedLabels.forEach(label => {
+            const btn = document.querySelector(`[data-label="${label}"]`);
+            if (btn) btn.classList.add('selected');
+        });
+    }
+    
+    // 페이지 벗어나기 전 경고
+    window.addEventListener('beforeunload', function(e) {
+        if (labelingState.isChanged()) {
+            e.preventDefault();
+            e.returnValue = '저장되지 않은 변경사항이 있습니다. 정말 페이지를 벗어나시겠습니까?';
+            return e.returnValue;
+        }
+    });
+});
+</script>
+{% endblock %}

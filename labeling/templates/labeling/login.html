@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <div class="screen">
+        <!-- 로그인 화면 -->
+        <div class="login-screen">
+            <h1>이미지 라벨링 시스템</h1>
+            <p>모드를 선택하고 로그인하세요</p>
+            
+            <!-- Google 로그인 버튼들 -->
+            <div style="text-align: center; margin: 30px 0;">
+                <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
+                    <a href="{% url 'google_user_login_start' %}" class="google-login-btn user-btn">
+                        <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" style="width: 20px; height: 20px; margin-right: 10px;">
+                        사용자로 Google 로그인
+                    </a>
+                    <a href="{% url 'google_admin_login_start' %}" class="google-login-btn admin-btn">
+                        <img src="https://developers.google.com/identity/images/g-logo.png" alt="Google" style="width: 20px; height: 20px; margin-right: 10px;">
+                        관리자로 Google 로그인
+                    </a>
+                </div>
+                <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; color: #666; font-size: 0.9rem;">
+                    <p><strong>사용자 모드:</strong> 라벨링 작업을 수행합니다 (관리자 승인 필요)</p>
+                    <p><strong>관리자 모드:</strong> 배치 생성 및 사용자 관리를 수행합니다</p>
+            </div>
+            </div>
+            
+            {% if error %}
+                <div style="color: red; margin-top: 20px; text-align: center;">
+                    {{ error }}
+                </div>
+            {% endif %}
+            
+            <!-- Django 메시지 표시 -->
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="message message-{{ message.tags }}" style="margin-top: 20px; padding: 15px; border-radius: 8px; text-align: center;">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.login-screen {
+    text-align: center;
+    padding: 60px 40px;
+}
+
+.login-screen h1 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    -webkit-background-clip: text;
+    -moz-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    -moz-text-fill-color: transparent;
+}
+
+.user-code-input {
+    width: 100%;
+    max-width: 400px;
+    padding: 15px 20px;
+    font-size: 1.1rem;
+    border: 2px solid #e1e8ed;
+    border-radius: 8px;
+    margin: 10px 0;
+    transition: border-color 0.3s;
+}
+
+.user-code-input:focus {
+    outline: none;
+    border-color: #667eea;
+}
+
+.google-login-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 24px;
+    background: white;
+    border: 1px solid #dadce0;
+    border-radius: 8px;
+    color: #3c4043;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 14px;
+    transition: all 0.3s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.google-login-btn:hover {
+    background: #f8f9fa;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    text-decoration: none;
+    color: #3c4043;
+}
+
+.google-login-btn.user-btn {
+    background: linear-gradient(135deg, #4285f4, #34a853);
+    color: white;
+    border: none;
+}
+
+.google-login-btn.user-btn:hover {
+    background: linear-gradient(135deg, #3367d6, #2e7d32);
+    color: white;
+}
+
+.google-login-btn.admin-btn {
+    background: linear-gradient(135deg, #ea4335, #fbbc04);
+    color: white;
+    border: none;
+}
+
+.google-login-btn.admin-btn:hover {
+    background: linear-gradient(135deg, #d23f31, #f9ab00);
+    color: white;
+}
+
+/* Django 메시지 스타일 */
+.message {
+    font-weight: 500;
+    font-size: 1rem;
+}
+
+.message-success {
+    background: linear-gradient(135deg, #4caf50, #66bb6a);
+    color: white;
+    border: 1px solid #4caf50;
+}
+
+.message-error {
+    background: linear-gradient(135deg, #f44336, #ef5350);
+    color: white;
+    border: 1px solid #f44336;
+}
+
+.message-info {
+    background: linear-gradient(135deg, #2196f3, #42a5f5);
+    color: white;
+    border: 1px solid #2196f3;
+}
+
+.message-warning {
+    background: linear-gradient(135deg, #ff9800, #ffa726);
+    color: white;
+    border: 1px solid #ff9800;
+}
+</style>
+{% endblock %} 

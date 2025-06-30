@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: labeling-project
+    env: python
+    buildCommand: |
+      pip install -r requirements.txt
+      python manage.py collectstatic --noinput
+      python manage.py migrate
+    startCommand: gunicorn labeling_project.wsgi:application
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: labeling_project.settings_production
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: 3.11.0
+
+  - type: pserv
+    name: labeling-postgres
+    env: postgresql
+    plan: free
+    databaseName: labeling_project
+    databaseUser: labeling_user 

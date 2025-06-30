@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container">
+    <div class="screen">
+        <!-- 네비게이션 헤더 -->
+        <div class="nav-header">
+            <div class="nav-left">
+                <div class="logo">📊 ImageLabel</div>
+                <div class="breadcrumb">
+                    <a href="{% url 'dashboard' %}" class="breadcrumb-item">대시보드</a>
+                    <span class="breadcrumb-separator">></span>
+                    <span class="breadcrumb-item active">내 메시지</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                <div class="user-info">
+                    <div>
+                        <div>{{ user.username }}</div>
+                        <div style="font-size: 0.8rem; color: #666;">{{ user.email|default:"" }}</div>
+                    </div>
+                </div>
+                <a href="{% url 'dashboard' %}" class="btn btn-small">대시보드</a>
+                <a href="{% url 'logout' %}" class="btn btn-small">로그아웃</a>
+            </div>
+        </div>
+
+        <div class="messages-container">
+            <div class="messages-header">
+                <h2>💬 내 문의 메시지</h2>
+                <p>관리자에게 보낸 문의사항과 답변을 확인할 수 있습니다.</p>
+            </div>
+
+            {% if user_messages %}
+                <div class="messages-list">
+                    {% for message in user_messages %}
+                    <div class="message-card {% if message.admin_reply %}replied{% endif %}">
+                        <div class="message-header">
+                            <div class="message-info">
+                                <h4>{{ message.subject }}</h4>
+                                <div class="message-meta">
+                                    <span class="message-type">
+                                        {% if message.message_type == 'global' %}
+                                            🌍 전역 문의
+                                        {% else %}
+                                            📦 배치 문의: {{ message.batch.name }}
+                                        {% endif %}
+                                    </span>
+                                    <span class="message-date">{{ message.created_at|date:"Y-m-d H:i" }}</span>
+                                </div>
+                            </div>
+                            <div class="message-status">
+                                {% if message.admin_reply %}
+                                    <span class="status-badge replied">답변 완료</span>
+                                {% else %}
+                                    <span class="status-badge pending">답변 대기</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="message-content">
+                            <div class="user-message">
+                                <h5>📝 문의 내용</h5>
+                                <p>{{ message.content|linebreaks }}</p>
+                            </div>
+                            
+                            {% if message.admin_reply %}
+                            <div class="admin-reply">
+                                <h5>💬 관리자 답변</h5>
+                                <p>{{ message.admin_reply|linebreaks }}</p>
+                                <div class="reply-info">
+                                    답변자: {{ message.replied_by.username }} | 
+                                    답변일: {{ message.replied_at|date:"Y-m-d H:i" }}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">📭</div>
+                    <h3>아직 문의하신 메시지가 없습니다</h3>
+                    <p>궁금한 점이나 문제가 있으시면 언제든지 문의해 주세요.</p>
+                    <a href="{% url 'dashboard' %}" class="btn btn-primary">대시보드로 돌아가기</a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<style>
+.messages-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.messages-header {
+    text-align: center;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #f0f0f0;
+}
+
+.messages-header h2 {
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.messages-header p {
+    color: #666;
+    font-size: 14px;
+}
+
+.messages-list {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.message-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 20px;
+    border-left: 4px solid #007bff;
+    transition: all 0.2s ease;
+}
+
+.message-card.replied {
+    border-left-color: #28a745;
+}
+
+.message-card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.message-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.message-info h4 {
+    margin: 0 0 5px 0;
+    color: #333;
+    font-size: 18px;
+}
+
+.message-meta {
+    display: flex;
+    gap: 15px;
+    font-size: 12px;
+    color: #666;
+}
+
+.message-type {
+    background: #e9ecef;
+    padding: 2px 8px;
+    border-radius: 12px;
+}
+
+.status-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.status-badge.replied {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-badge.pending {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.message-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.user-message,
+.admin-reply {
+    padding: 15px;
+    border-radius: 6px;
+}
+
+.user-message {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+}
+
+.admin-reply {
+    background: #e8f5e8;
+    border: 1px solid #c3e6c3;
+}
+
+.user-message h5,
+.admin-reply h5 {
+    margin: 0 0 10px 0;
+    color: #333;
+    font-size: 14px;
+}
+
+.user-message p,
+.admin-reply p {
+    margin: 0;
+    color: #555;
+    line-height: 1.5;
+}
+
+.reply-info {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #666;
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+}
+
+.empty-state h3 {
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.empty-state p {
+    margin-bottom: 20px;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 4px;
+    display: inline-block;
+    transition: background 0.2s ease;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+    text-decoration: none;
+    color: white;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+    .message-header {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .message-meta {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .messages-container {
+        padding: 10px;
+    }
+}
+</style>
+{% endblock %} 
