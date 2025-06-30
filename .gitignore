@@ -5,6 +5,9 @@ client_id.json
 *_key.txt
 *.key
 *.pem
+API*.pptx
+*API*.pptx
+*.pptx
 
 # Environment variables
 .env
