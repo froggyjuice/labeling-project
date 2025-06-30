@@ -172,17 +172,17 @@ ADMINS = [
 ]
 MANAGERS = ADMINS
 
-# 보안 키 설정 (환경 변수에서 가져오기)
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')
-if not SECRET_KEY:
-    raise ValueError("DJANGO_SECRET_KEY 환경 변수가 설정되지 않았습니다.")
+# 보안 키 설정 (환경 변수에서 가져오기 또는 임시 키)
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-temp-key-for-initial-deploy-change-this-immediately-123456789')
+if SECRET_KEY == 'django-insecure-temp-key-for-initial-deploy-change-this-immediately-123456789':
+    print("⚠️  경고: 임시 SECRET_KEY 사용 중! 환경 변수를 설정하세요.")
 
-# Google OAuth 설정 (환경 변수에서 가져오기)
-GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID')
-GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET')
+# Google OAuth 설정 (환경 변수에서 가져오기 또는 임시 값)
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get('GOOGLE_OAUTH_CLIENT_ID', 'temp-client-id')
+GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get('GOOGLE_OAUTH_CLIENT_SECRET', 'temp-client-secret')
 
-if not GOOGLE_OAUTH_CLIENT_ID or not GOOGLE_OAUTH_CLIENT_SECRET:
-    raise ValueError("Google OAuth 환경 변수가 설정되지 않았습니다.")
+if GOOGLE_OAUTH_CLIENT_ID == 'temp-client-id' or GOOGLE_OAUTH_CLIENT_SECRET == 'temp-client-secret':
+    print("⚠️  경고: 임시 Google OAuth 설정 사용 중! Google 로그인이 작동하지 않습니다. 환경 변수를 설정하세요.")
 
 # Rate Limiting (django-ratelimit 사용시)
 RATELIMIT_USE_CACHE = 'default'
