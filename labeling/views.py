@@ -416,7 +416,8 @@ def google_user_login_start(request):
             del request.session['drive_oauth_state']
         request.session.modified = True
         
-        redirect_uri = "http://localhost:8000/google-user-auth-callback/"
+        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
+        redirect_uri = request.build_absolute_uri('/google-user-auth-callback/')
         
         flow = Flow.from_client_config(
             {
@@ -425,7 +426,7 @@ def google_user_login_start(request):
                     "client_secret": GOOGLE_CLIENT_SECRET,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://127.0.0.1:8000/google-user-auth-callback/"]
+                    "redirect_uris": [redirect_uri]
                 }
             },
             scopes=[
@@ -433,7 +434,7 @@ def google_user_login_start(request):
                 "https://www.googleapis.com/auth/userinfo.email",
                 "https://www.googleapis.com/auth/userinfo.profile"
             ],
-            redirect_uri="http://127.0.0.1:8000/google-user-auth-callback/"
+            redirect_uri=redirect_uri
         )
         
         authorization_url, state = flow.authorization_url(
@@ -462,7 +463,8 @@ def google_admin_login_start(request):
             del request.session['drive_oauth_state']
         request.session.modified = True
         
-        redirect_uri = "http://localhost:8000/google-admin-auth-callback/"
+        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
+        redirect_uri = request.build_absolute_uri('/google-admin-auth-callback/')
         
         flow = Flow.from_client_config(
             {
@@ -471,7 +473,7 @@ def google_admin_login_start(request):
                     "client_secret": GOOGLE_CLIENT_SECRET,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://127.0.0.1:8000/google-admin-auth-callback/"]
+                    "redirect_uris": [redirect_uri]
                 }
             },
             scopes=[
@@ -481,7 +483,7 @@ def google_admin_login_start(request):
                 "https://www.googleapis.com/auth/drive.readonly",
                 "https://www.googleapis.com/auth/drive.metadata.readonly"
             ],
-            redirect_uri="http://127.0.0.1:8000/google-admin-auth-callback/"
+            redirect_uri=redirect_uri
         )
         
         authorization_url, state = flow.authorization_url(
@@ -506,6 +508,9 @@ def google_drive_auth_start(request):
         return redirect('login')
         
     try:
+        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
+        redirect_uri = request.build_absolute_uri('/google-drive-auth-callback/')
+        
         flow = Flow.from_client_config(
             {
                 "web": {
@@ -513,14 +518,14 @@ def google_drive_auth_start(request):
                     "client_secret": GOOGLE_CLIENT_SECRET,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://127.0.0.1:8000/google-drive-auth-callback/"]
+                    "redirect_uris": [redirect_uri]
                 }
             },
             scopes=[
                 "https://www.googleapis.com/auth/drive.readonly",
                 "https://www.googleapis.com/auth/drive.metadata.readonly"
             ],
-            redirect_uri="http://127.0.0.1:8000/google-drive-auth-callback/"
+            redirect_uri=redirect_uri
         )
         
         authorization_url, state = flow.authorization_url(
@@ -543,6 +548,9 @@ def google_user_auth_callback(request):
             messages.error(request, "인증 상태가 올바르지 않습니다. 다시 시도해주세요.")
             return redirect('login')
         
+        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
+        redirect_uri = request.build_absolute_uri('/google-user-auth-callback/')
+        
         flow = Flow.from_client_config(
             {
                 "web": {
@@ -550,7 +558,7 @@ def google_user_auth_callback(request):
                     "client_secret": GOOGLE_CLIENT_SECRET,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://127.0.0.1:8000/google-user-auth-callback/"]
+                    "redirect_uris": [redirect_uri]
                 }
             },
             scopes=[
@@ -559,7 +567,7 @@ def google_user_auth_callback(request):
                 "https://www.googleapis.com/auth/userinfo.profile"
             ],
             state=request.session['google_oauth_state'],
-            redirect_uri="http://127.0.0.1:8000/google-user-auth-callback/"
+            redirect_uri=redirect_uri
         )
         
         # 인증 토큰 가져오기
@@ -644,6 +652,9 @@ def google_admin_auth_callback(request):
             messages.error(request, "인증 상태가 올바르지 않습니다. 다시 시도해주세요.")
             return redirect('login')
         
+        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
+        redirect_uri = request.build_absolute_uri('/google-admin-auth-callback/')
+        
         flow = Flow.from_client_config(
             {
                 "web": {
@@ -651,7 +662,7 @@ def google_admin_auth_callback(request):
                     "client_secret": GOOGLE_CLIENT_SECRET,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://127.0.0.1:8000/google-admin-auth-callback/"]
+                    "redirect_uris": [redirect_uri]
                 }
             },
             scopes=[
@@ -662,7 +673,7 @@ def google_admin_auth_callback(request):
                 "https://www.googleapis.com/auth/drive.metadata.readonly"
             ],
             state=request.session['google_oauth_state'],
-            redirect_uri="http://127.0.0.1:8000/google-admin-auth-callback/"
+            redirect_uri=redirect_uri
         )
         
         # 인증 토큰 가져오기
@@ -758,6 +769,9 @@ def google_drive_auth_callback(request):
             messages.error(request, "인증 상태가 올바르지 않습니다. 다시 시도해주세요.")
             return redirect('drive_import')
         
+        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
+        redirect_uri = request.build_absolute_uri('/google-drive-auth-callback/')
+        
         flow = Flow.from_client_config(
             {
                 "web": {
@@ -765,7 +779,7 @@ def google_drive_auth_callback(request):
                     "client_secret": GOOGLE_CLIENT_SECRET,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": ["http://127.0.0.1:8000/google-drive-auth-callback/"]
+                    "redirect_uris": [redirect_uri]
                 }
             },
             scopes=[
@@ -773,7 +787,7 @@ def google_drive_auth_callback(request):
                 "https://www.googleapis.com/auth/drive.metadata.readonly"
             ],
             state=request.session['drive_oauth_state'],
-            redirect_uri="http://127.0.0.1:8000/google-drive-auth-callback/"
+            redirect_uri=redirect_uri
         )
         
         # 인증 토큰 가져오기
