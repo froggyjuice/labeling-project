@@ -1240,7 +1240,10 @@ def proxy_drive_image(request, file_id):
     try:
         # 4. 먼저 로컬에 다운로드된 이미지가 있는지 확인
         try:
-            image_obj = Image.objects.get(drive_file_id=file_id)
+            # 중복 Image 객체 처리: get() 대신 filter().first() 사용
+            image_obj = Image.objects.filter(drive_file_id=file_id).first()
+            if not image_obj:
+                raise Image.DoesNotExist
             if image_obj.url and image_obj.url.startswith('/media/'):
                 # 로컬 파일이 존재하는지 확인
                 local_path = os.path.join(settings.MEDIA_ROOT, image_obj.url.replace('/media/', ''))
