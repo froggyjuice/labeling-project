@@ -5,6 +5,7 @@ python-dotenv
 
 # 데이터베이스
 psycopg2-binary  # PostgreSQL 어댑터
+dj-database-url>=2.0.0  # DATABASE_URL 파싱
 
 # 웹 서버
 gunicorn>=22.0.0

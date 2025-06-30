@@ -53,22 +53,19 @@ CSP_FONT_SRC = ["'self'", "https://fonts.gstatic.com"]
 CSP_IMG_SRC = ["'self'", "data:", "https:", "blob:"]
 CSP_CONNECT_SRC = ["'self'", "https://accounts.google.com", "https://oauth2.googleapis.com"]
 
-# 데이터베이스 보안 (프로덕션에서는 PostgreSQL 권장)
+# 데이터베이스 설정 (Render PostgreSQL)
+import dj_database_url
+
+# DATABASE_URL이 있으면 사용, 없으면 개별 환경 변수 사용
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'labeling_project'),
-        'USER': os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
-        'OPTIONS': {
-            'sslmode': 'require',
-        },
-    }
+    'default': dj_database_url.config(
+        default=f"postgresql://{os.environ.get('DB_USER', 'postgres')}:{os.environ.get('DB_PASSWORD', '')}@{os.environ.get('DB_HOST', 'localhost')}:{os.environ.get('DB_PORT', '5432')}/{os.environ.get('DB_NAME', 'labeling_project')}",
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
 
-# 로깅 설정
+# 로깅 설정 (Render 호환)
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -83,30 +80,24 @@ LOGGING = {
         },
     },
     'handlers': {
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': '/var/log/django/labeling_project.log',
-            'formatter': 'verbose',
-        },
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'simple',
+            'formatter': 'verbose',
         },
     },
     'root': {
-        'handlers': ['file', 'console'],
+        'handlers': ['console'],
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['file', 'console'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
         'labeling': {
-            'handlers': ['file', 'console'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
