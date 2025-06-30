@@ -146,17 +146,17 @@ else:
     MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
     MEDIA_URL = '/media/'
 
-# 캐시 설정 (Redis 권장)
+# 캐시 설정 (프로덕션에서는 데이터베이스 사용)
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/1'),
+        'BACKEND': 'django.core.cache.backends.db.DatabaseCache',
+        'LOCATION': 'django_cache_table',
     }
 }
 
-# 세션 스토리지를 Redis로 변경 (선택사항)
-SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
-SESSION_CACHE_ALIAS = 'default'
+# 세션 스토리지를 데이터베이스로 변경 (Render 호환)
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_AGE = 1209600  # 2주
 
 # 이메일 설정 (오류 알림용)
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

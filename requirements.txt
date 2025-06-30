@@ -11,9 +11,9 @@ dj-database-url>=2.0.0  # DATABASE_URL 파싱
 gunicorn>=22.0.0
 whitenoise>=6.0.0  # 정적 파일 서빙
 
-# 캐시 및 세션
-redis>=5.0.0
-django-redis>=5.0.0
+# 캐시 및 세션 (데이터베이스 캐시 사용)
+# redis>=5.0.0  # 프로덕션에서는 데이터베이스 캐시 사용
+# django-redis>=5.0.0  # 프로덕션에서는 데이터베이스 캐시 사용
 
 # Google OAuth
 google-auth>=2.0.0
