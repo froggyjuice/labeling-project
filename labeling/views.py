@@ -97,6 +97,9 @@ def admin_dashboard(request):
     if request.user.role != 'admin':
         return redirect('dashboard')
     
+    # Google Drive 인증 상태 확인
+    drive_credentials_available = 'drive_credentials' in request.session
+    
     batches = Batch.objects.prefetch_related('images').all().order_by('-created_at')
     
     # 승인 대기 중인 사용자들
@@ -206,7 +209,8 @@ def admin_dashboard(request):
             'total_batches': all_batches_count,
             'active_batches': active_batches_count,
             'inactive_batches': inactive_batches_count
-        }
+        },
+        'drive_credentials_available': drive_credentials_available
     }
     return render(request, 'labeling/admin_dashboard.html', context)
 
@@ -223,6 +227,9 @@ def dashboard(request):
     # 승인되지 않은 사용자는 대기 페이지로 리다이렉트
     if not request.user.is_approved:
         return redirect('waiting')
+    
+    # Google Drive 인증 상태 확인
+    drive_credentials_available = 'drive_credentials' in request.session
     
     # 활성화된 배치만 표시
     batches = Batch.objects.filter(is_active=True)
@@ -279,7 +286,8 @@ def dashboard(request):
             "total_batches": all_batches.count(),
             "inactive_batches": inactive_batches.count(),
             "inactive_batch_names": [batch.name for batch in inactive_batches[:3]]  # 최대 3개만 표시
-        }
+        },
+        "drive_credentials_available": drive_credentials_available
     }
     
     return render(request, "labeling/dashboard.html", context)
