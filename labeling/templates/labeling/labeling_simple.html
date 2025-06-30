@@ -7,7 +7,7 @@
             <div class="nav-left">
                 <div class="logo">📊 ImageLabel</div>
                 <div class="breadcrumb">
-                    <span class="breadcrumb-item" onclick="location.href='/dashboard/'">대시보드</span>
+                    <span class="breadcrumb-item" onclick="goToDashboard()">대시보드</span>
                     <span class="breadcrumb-separator">></span>
                     <span class="breadcrumb-item active">{{ batch.name|default:"배치" }}</span>
                 </div>
@@ -16,8 +16,8 @@
                 <div class="quick-stats">
                     <span>🏷️ {{ current_index|add:1 }} / {{ total_images }}</span>
                 </div>
-                <a href="/dashboard/" class="home-btn">🏠 홈</a>
-                <a href="/dashboard/" class="btn btn-small">대시보드</a>
+                <a href="#" onclick="goToDashboard(); return false;" class="home-btn">🏠 홈</a>
+                <a href="#" onclick="goToDashboard(); return false;" class="btn btn-small">대시보드</a>
             </div>
         </div>
 
@@ -112,6 +112,149 @@ function selectLabel(label) {
     console.log('Selected labels:', selectedLabels);
 }
 
+// 저장 확인 모달 HTML 생성
+function createSaveConfirmModal() {
+    const modal = document.createElement('div');
+    modal.id = 'saveConfirmModal';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    `;
+    
+    modal.innerHTML = `
+        <div style="
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            animation: modalSlideIn 0.3s ease-out;
+        ">
+            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <h3 style="margin: 0 0 15px 0; color: #333; font-size: 20px;">
+                현재까지의 진행상황을 저장하고 나가시겠습니까?
+            </h3>
+            <p style="margin: 0 0 25px 0; color: #666; font-size: 14px;">
+                저장하지 않으면 현재 이미지의 라벨링 작업이 손실됩니다.
+            </p>
+            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+                <button id="saveAndLeave" style="
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    padding: 12px 18px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    margin: 5px;
+                ">저장하고 나가기</button>
+                <button id="stayOnPage" style="
+                    background: #6c757d;
+                    color: white;
+                    border: none;
+                    padding: 12px 18px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    margin: 5px;
+                ">페이지에 머무르기</button>
+                <button id="leaveWithoutSave" style="
+                    background: #dc3545;
+                    color: white;
+                    border: none;
+                    padding: 12px 18px;
+                    border-radius: 6px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: 500;
+                    margin: 5px;
+                ">저장없이 나가기</button>
+            </div>
+        </div>
+    `;
+    
+    // 애니메이션 CSS 추가
+    if (!document.getElementById('modalAnimationCSS')) {
+        const style = document.createElement('style');
+        style.id = 'modalAnimationCSS';
+        style.textContent = `
+            @keyframes modalSlideIn {
+                from {
+                    opacity: 0;
+                    transform: scale(0.9) translateY(-10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: scale(1) translateY(0);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    document.body.appendChild(modal);
+    return modal;
+}
+
+// 저장 확인 함수
+function showSaveConfirmation(callback) {
+    if (!hasChanges) {
+        callback(true);
+        return;
+    }
+    
+    const modal = createSaveConfirmModal();
+    
+    // 버튼 이벤트 리스너
+    document.getElementById('saveAndLeave').onclick = function() {
+        // 현재 라벨 저장 후 나가기
+        if (selectedLabels.length > 0) {
+            saveLabelToDatabase(() => {
+                hasChanges = false;
+                document.body.removeChild(modal);
+                callback(true);
+            });
+        } else {
+            // 선택된 라벨이 없으면 그냥 나가기
+            hasChanges = false;
+            document.body.removeChild(modal);
+            callback(true);
+        }
+    };
+    
+    document.getElementById('stayOnPage').onclick = function() {
+        document.body.removeChild(modal);
+        callback(false);
+    };
+    
+    document.getElementById('leaveWithoutSave').onclick = function() {
+        hasChanges = false;
+        document.body.removeChild(modal);
+        callback(true);
+    };
+    
+    // 모달 배경 클릭 시 머무르기
+    modal.onclick = function(e) {
+        if (e.target === modal) {
+            document.body.removeChild(modal);
+            callback(false);
+        }
+    };
+}
+
 // 네비게이션 함수들
 function goToNext() {
     console.log('Going to next image');
@@ -122,24 +265,26 @@ function goToNext() {
     
     // 라벨 저장 후 다음 이미지로 이동
     saveLabelToDatabase(() => {
-    hasChanges = false;
-    const nextIndex = appData.currentIndex + 1;
-    if (nextIndex < appData.totalImages) {
-        window.location.href = `/labeling/${appData.batchId}/?index=${nextIndex}`;
-    } else {
-        alert('배치가 완료되었습니다!');
-        window.location.href = '/dashboard/';
-    }
+        hasChanges = false;
+        const nextIndex = appData.currentIndex + 1;
+        if (nextIndex < appData.totalImages) {
+            window.location.href = `/labeling/${appData.batchId}/?index=${nextIndex}`;
+        } else {
+            alert('배치가 완료되었습니다!');
+            window.location.href = '/dashboard/';
+        }
     });
 }
 
 function goToPrevious() {
     console.log('Going to previous image');
     if (appData.currentIndex > 0) {
-        // 이전 이미지로 이동할 때도 변경사항 경고 제거
-        hasChanges = false;
-        const prevIndex = appData.currentIndex - 1;
-        window.location.href = `/labeling/${appData.batchId}/?index=${prevIndex}`;
+        showSaveConfirmation((shouldLeave) => {
+            if (shouldLeave) {
+                const prevIndex = appData.currentIndex - 1;
+                window.location.href = `/labeling/${appData.batchId}/?index=${prevIndex}`;
+            }
+        });
     }
 }
 
@@ -148,7 +293,6 @@ function skipCurrent() {
     selectedLabels = [];
     document.querySelectorAll('.label-btn').forEach(btn => btn.classList.remove('selected'));
     
-    // 보류할 때도 변경사항 경고 제거
     hasChanges = false;
     
     const nextIndex = appData.currentIndex + 1;
@@ -158,6 +302,14 @@ function skipCurrent() {
         alert('배치가 완료되었습니다!');
         window.location.href = '/dashboard/';
     }
+}
+
+function goToDashboard() {
+    showSaveConfirmation((shouldLeave) => {
+        if (shouldLeave) {
+            window.location.href = '/dashboard/';
+        }
+    });
 }
 
 function saveCurrentProgress() {
@@ -236,6 +388,11 @@ function getCookie(name) {
 
 // 키보드 단축키
 document.addEventListener('keydown', function(event) {
+    // 모달이 열려있으면 키보드 단축키 비활성화
+    if (document.getElementById('saveConfirmModal')) {
+        return;
+    }
+    
     switch(event.key) {
         case '1':
             event.preventDefault();
@@ -264,18 +421,14 @@ document.addEventListener('keydown', function(event) {
             break;
         case 'Escape':
             event.preventDefault();
-            if (confirm('대시보드로 돌아가시겠습니까?')) {
-                window.location.href = '/dashboard/';
-            }
+            goToDashboard();
             break;
     }
 });
 
-// 페이지 벗어나기 전 경고 (정상적인 네비게이션은 제외)
-let isNavigating = false;
-
+// beforeunload 이벤트 (브라우저 새로고침, 닫기 등)
 window.addEventListener('beforeunload', function(e) {
-    if (hasChanges && !isNavigating) {
+    if (hasChanges) {
         e.preventDefault();
         e.returnValue = '저장되지 않은 변경사항이 있습니다.';
         return e.returnValue;

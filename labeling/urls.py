@@ -42,7 +42,7 @@ urlpatterns = [
     path('google-drive-auth-callback/', views.google_drive_auth_callback, name='google_drive_auth_callback'),
     path('drive-folder-files/', views.list_drive_folder_files, name='list_drive_folder_files'),
     path('drive-import/', views.drive_import, name='drive_import'),
-    path('proxy-drive-image/<str:file_id>/', views.proxy_drive_image, name='proxy_drive_image'),
+    path('proxy/drive/<str:file_id>/', views.proxy_drive_image, name='proxy_drive_image'),
     path('create-batch/<str:folder_id>/', views.create_batch_from_drive_files, name='create_batch_from_drive_files'),
     # 메시지 관련
     path('api/send-message/', views.send_message, name='send_message'),

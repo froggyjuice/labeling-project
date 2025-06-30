@@ -290,7 +290,7 @@ def labeling(request, batch_id):
             "user_id": request.user.id,
         }
         
-        return render(request, "labeling/labeling_simple.html", context)
+        return render(request, "labeling/labeling.html", context)
         
     except Batch.DoesNotExist:
         messages.error(request, "배치를 찾을 수 없습니다.")
