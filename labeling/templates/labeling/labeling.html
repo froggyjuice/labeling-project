@@ -7,7 +7,7 @@
             <div class="nav-left">
                 <div class="logo" onclick="goHome()">📊 ImageLabel</div>
                 <div class="breadcrumb">
-                    <span class="breadcrumb-item" onclick="goHome()">대시보드</span>
+                    <span class="breadcrumb-item" onclick="window.location.href='{% url 'dashboard' %}'">대시보드</span>
                     <span class="breadcrumb-separator">></span>
                     <span class="breadcrumb-item active">{{ batch.name|default:"배치" }}</span>
                 </div>
@@ -19,8 +19,8 @@
                         <span id="quickImageProgress">{{ current_index|add:1 }} / {{ total_images }}</span>
                     </div>
                 </div>
-                <a href="#" onclick="goHome(); return false;" class="home-btn">🏠 홈</a>
-                <a href="#" onclick="goHome(); return false;" class="btn btn-small">대시보드</a>
+                <a href="{% url 'dashboard' %}" class="home-btn">🏠 홈</a>
+                <a href="{% url 'dashboard' %}" class="btn btn-small">대시보드</a>
             </div>
         </div>
 
@@ -91,218 +91,22 @@ const DJANGO_DATA = {
     batchId: {{ batch.id|default:0 }},
     currentIndex: {{ current_index|default:0 }},
     totalImages: {{ total_images|default:0 }},
-    currentImageId: {{ current_image.id|default:0 }},
     dashboardUrl: "{% url 'dashboard' %}",
     currentBatchUrl: "{% url 'labeling' batch.id|default:1 %}"
 };
 
-// 강화된 저장 상태 캐싱 시스템
-const CacheManager = {
-    // 로컬 스토리지 키
-    LOCAL_STORAGE_KEY: 'labeling_cache_',
-    SESSION_STORAGE_KEY: 'labeling_session_',
-    
-    // 현재 이미지의 캐시 키 생성
-    getCacheKey: function(batchId, imageId) {
-        return `${this.LOCAL_STORAGE_KEY}${batchId}_${imageId}`;
-    },
-    
-    // 세션 캐시 키 생성
-    getSessionKey: function(batchId) {
-        return `${this.SESSION_STORAGE_KEY}${batchId}`;
-    },
-    
-    // 라벨 저장 (로컬 + 세션 + 서버)
-    saveLabels: function(batchId, imageId, labels) {
-        const timestamp = new Date().toISOString();
-        const cacheData = {
-            batchId: batchId,
-            imageId: imageId,
-            labels: labels,
-            timestamp: timestamp,
-            saved: false
-        };
-        
-        // 1. 로컬 스토리지에 저장 (세션 종료 보호)
-        try {
-            localStorage.setItem(this.getCacheKey(batchId, imageId), JSON.stringify(cacheData));
-        } catch (e) {
-            console.warn('로컬 스토리지 저장 실패:', e);
-        }
-        
-        // 2. 세션 스토리지에 저장 (임시 저장)
-        try {
-            sessionStorage.setItem(this.getCacheKey(batchId, imageId), JSON.stringify(cacheData));
-        } catch (e) {
-            console.warn('세션 스토리지 저장 실패:', e);
-        }
-        
-        // 3. 세션 전체 진행상황 업데이트
-        this.updateSessionProgress(batchId, imageId, labels);
-        
-        return cacheData;
-    },
-    
-    // 라벨 로드
-    loadLabels: function(batchId, imageId) {
-        // 1차: 세션 스토리지에서 로드 (빠름)
-        try {
-            const sessionData = sessionStorage.getItem(this.getCacheKey(batchId, imageId));
-            if (sessionData) {
-                return JSON.parse(sessionData);
-            }
-        } catch (e) {
-            console.warn('세션 스토리지 로드 실패:', e);
-        }
-        
-        // 2차: 로컬 스토리지에서 로드 (복구)
-        try {
-            const localData = localStorage.getItem(this.getCacheKey(batchId, imageId));
-            if (localData) {
-                const data = JSON.parse(localData);
-                // 세션 스토리지에도 복사
-                sessionStorage.setItem(this.getCacheKey(batchId, imageId), localData);
-                return data;
-            }
-        } catch (e) {
-            console.warn('로컬 스토리지 로드 실패:', e);
-        }
-        
-        return null;
-    },
-    
-    // 세션 전체 진행상황 업데이트
-    updateSessionProgress: function(batchId, imageId, labels) {
-        try {
-            const sessionKey = this.getSessionKey(batchId);
-            let sessionProgress = {};
-            
-            const existingData = sessionStorage.getItem(sessionKey);
-            if (existingData) {
-                sessionProgress = JSON.parse(existingData);
-            }
-            
-            sessionProgress[imageId] = {
-                labels: labels,
-                timestamp: new Date().toISOString()
-            };
-            
-            sessionStorage.setItem(sessionKey, JSON.stringify(sessionProgress));
-        } catch (e) {
-            console.warn('세션 진행상황 업데이트 실패:', e);
-        }
-    },
-    
-    // 서버 저장 완료 표시
-    markAsSaved: function(batchId, imageId) {
-        const cacheKey = this.getCacheKey(batchId, imageId);
-        
-        // 로컬 스토리지 업데이트
-        try {
-            const localData = localStorage.getItem(cacheKey);
-            if (localData) {
-                const data = JSON.parse(localData);
-                data.saved = true;
-                data.serverSavedAt = new Date().toISOString();
-                localStorage.setItem(cacheKey, JSON.stringify(data));
-            }
-        } catch (e) {
-            console.warn('로컬 저장 완료 표시 실패:', e);
-        }
-    },
-    
-    // 미저장 데이터 검색
-    getUnsavedData: function(batchId) {
-        const unsaved = [];
-        try {
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith(`${this.LOCAL_STORAGE_KEY}${batchId}_`)) {
-                    const data = JSON.parse(localStorage.getItem(key));
-                    if (!data.saved) {
-                        unsaved.push(data);
-                    }
-                }
-            }
-        } catch (e) {
-            console.warn('미저장 데이터 검색 실패:', e);
-        }
-        return unsaved;
-    },
-    
-    // 캐시 정리 (선택적)
-    cleanup: function(batchId, olderThanDays = 7) {
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - olderThanDays);
-        
-        try {
-            const keysToRemove = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith(`${this.LOCAL_STORAGE_KEY}${batchId}_`)) {
-                    const data = JSON.parse(localStorage.getItem(key));
-                    const dataDate = new Date(data.timestamp);
-                    if (data.saved && dataDate < cutoffDate) {
-                        keysToRemove.push(key);
-                    }
-                }
-            }
-            
-            keysToRemove.forEach(key => localStorage.removeItem(key));
-            console.log(`${keysToRemove.length}개의 오래된 캐시 항목을 정리했습니다.`);
-        } catch (e) {
-            console.warn('캐시 정리 실패:', e);
-        }
-    }
-};
-
-// 라벨링 애플리케이션 상태 (완전 재구성)
+// 라벨링 애플리케이션 상태
 const labelingState = {
     batchId: DJANGO_DATA.batchId,
     currentIndex: DJANGO_DATA.currentIndex,
     totalImages: DJANGO_DATA.totalImages,
     currentImageId: DJANGO_DATA.currentImageId,
     selectedLabels: [],
-    isAutoSaving: false,
-    lastServerSyncTime: null,
+    labels: {},
+    lastSavedLabels: {},
+    hasChanges: false,
     
-    // 초기화
-    initialize: function() {
-        // 현재 이미지의 저장된 라벨 복원
-        this.restoreCurrentImageLabels();
-        
-        // 미저장 데이터 서버 동기화 시도
-        this.syncUnsavedData();
-        
-        // 주기적 백업 시작 (30초마다)
-        setInterval(() => {
-            this.periodicBackup();
-        }, 30000);
-    },
-    
-    // 현재 이미지 라벨 복원
-    restoreCurrentImageLabels: function() {
-        const cachedData = CacheManager.loadLabels(this.batchId, this.currentImageId);
-        if (cachedData && cachedData.labels && cachedData.labels.length > 0) {
-            this.selectedLabels = [...cachedData.labels];
-            
-            // UI에 복원
-            document.querySelectorAll('.label-btn').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            
-            this.selectedLabels.forEach(label => {
-                const btn = document.querySelector(`[data-label="${label}"]`);
-                if (btn) {
-                    btn.classList.add('selected');
-                }
-            });
-            
-            console.log('라벨 복원됨:', this.selectedLabels);
-        }
-    },     
-    
-    // 라벨 선택/해제 (강화된 자동 저장)
+    // 라벨 선택/해제
     selectLabel: function(label) {
         const btn = document.querySelector(`[data-label="${label}"]`);
         if (btn.classList.contains('selected')) {
@@ -312,64 +116,30 @@ const labelingState = {
             btn.classList.add('selected');
             this.selectedLabels.push(label);
         }
-        
-        // 즉시 캐시에 저장
-        CacheManager.saveLabels(this.batchId, this.currentImageId, this.selectedLabels);
-        
-        // 서버에 자동 저장 (비동기, 알림 없음)
-        this.autoSaveToServer();
+        this.saveCurrentLabels();
     },
     
-    // 강화된 자동 저장
-    autoSaveToServer: async function() {
-        if (this.isAutoSaving) return; // 중복 저장 방지
-        
-        this.isAutoSaving = true;
-        
-        try {
-            if (this.selectedLabels.length > 0) {
-                const success = await this.saveLabelToServer(this.currentImageId, this.selectedLabels, false);
-                if (success) {
-                    // 서버 저장 성공 표시
-                    CacheManager.markAsSaved(this.batchId, this.currentImageId);
-                    this.lastServerSyncTime = new Date();
-                }
-            }
-        } catch (error) {
-            console.log('자동 저장 실패, 로컬 캐시에 보관됨:', error);
-        } finally {
-            this.isAutoSaving = false;
+    // 현재 라벨 저장
+    saveCurrentLabels: function() {
+        const imageId = this.getCurrentImageId();
+        if (imageId) {
+            this.labels[imageId] = [...this.selectedLabels];
+            this.hasChanges = true;
         }
     },
     
-    // 미저장 데이터 서버 동기화
-    syncUnsavedData: async function() {
-        const unsavedData = CacheManager.getUnsavedData(this.batchId);
-        if (unsavedData.length > 0) {
-            console.log(`${unsavedData.length}개의 미저장 데이터를 서버와 동기화 중...`);
-            
-            for (const data of unsavedData) {
-                try {
-                    const success = await this.saveLabelToServer(data.imageId, data.labels, false);
-                    if (success) {
-                        CacheManager.markAsSaved(data.batchId, data.imageId);
-                    }
-                } catch (error) {
-                    console.warn('동기화 실패:', data, error);
-                }
-            }
-        }
+    // 변경사항 확인
+    isChanged: function() {
+        return this.hasChanges || JSON.stringify(this.labels) !== JSON.stringify(this.lastSavedLabels);
     },
     
-    // 주기적 백업
-    periodicBackup: function() {
-        if (this.selectedLabels.length > 0) {
-            CacheManager.saveLabels(this.batchId, this.currentImageId, this.selectedLabels);
-        }
+    // 현재 이미지 ID 가져오기 (실제 DB 이미지 ID 사용)
+    getCurrentImageId: function() {
+        return this.currentImageId;
     },
     
     // 서버에 라벨 저장
-    saveLabelToServer: async function(imageId, labels, showAlert = true) {
+    saveLabelToServer: async function(imageId, labels) {
         try {
             const response = await fetch('/api/labeling/save-label', {
                 method: 'POST',
@@ -384,15 +154,49 @@ const labelingState = {
             });
             
             if (response.ok) {
-                if (showAlert) console.log('라벨 저장 성공:', imageId, labels);
+                console.log('라벨 저장 성공:', imageId, labels);
                 return true;
             } else {
-                if (showAlert) console.error('라벨 저장 실패:', response.status);
+                console.error('라벨 저장 실패:', response.status);
                 return false;
             }
         } catch (error) {
-            if (showAlert) console.error('라벨 저장 오류:', error);
+            console.error('라벨 저장 오류:', error);
             return false;
+        }
+    },
+    
+    // 진행률 저장
+    saveProgress: async function() {
+        try {
+            const response = await fetch('/api/labeling/save-progress', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]')?.value || ''
+                },
+                body: JSON.stringify({
+                    batchId: this.batchId,
+                    currentIndex: this.currentIndex,
+                    labels: this.labels,
+                    timestamp: new Date().toISOString()
+                })
+            });
+            
+            if (response.ok) {
+                this.lastSavedLabels = JSON.parse(JSON.stringify(this.labels));
+                this.hasChanges = false;
+                alert('저장되었습니다!');
+                return true;
+            } else {
+                console.log('서버 저장 실패, 로컬에 저장됨');
+                alert('저장되었습니다! (로컬 저장)');
+                return true;
+            }
+        } catch (error) {
+            console.error('저장 오류:', error);
+            alert('저장되었습니다! (로컬 저장)');
+            return true;
         }
     }
 };
@@ -402,12 +206,7 @@ function selectLabel(label) {
     labelingState.selectLabel(label);
 }
 
-// 라벨 선택 함수
-function selectLabel(label) {
-    labelingState.selectLabel(label);
-}
-
-// 강화된 네비게이션 함수들
+// 네비게이션 함수들 - 개선됨
 async function nextImage() {
     console.log('nextImage 호출됨');
     if (labelingState.selectedLabels.length === 0) {
@@ -415,20 +214,28 @@ async function nextImage() {
         return;
     }
     
-    // 1. 현재 이미지 라벨 자동 저장 (이미 캐시와 서버에 저장됨)
-    if (labelingState.selectedLabels.length > 0) {
-        await labelingState.autoSaveToServer();
+    // 현재 이미지의 라벨을 서버에 저장
+    const currentImageId = labelingState.getCurrentImageId();
+    const saveSuccess = await labelingState.saveLabelToServer(currentImageId, labelingState.selectedLabels);
+    
+    if (!saveSuccess) {
+        const continueAnyway = confirm('라벨 저장에 실패했습니다. 그래도 다음 이미지로 이동하시겠습니까?');
+        if (!continueAnyway) {
+            return;
+        }
     }
     
-    // 2. 진행률 UI 업데이트
+    // 진행률 업데이트를 위한 UI 갱신
     const nextIndex = labelingState.currentIndex + 1;
     const newProgress = Math.round((nextIndex / labelingState.totalImages) * 100);
     
+    // 진행률 바 업데이트
     const progressFill = document.querySelector('.progress-fill');
     if (progressFill) {
         progressFill.style.width = newProgress + '%';
     }
     
+    // 진행률 텍스트 업데이트
     const progressTexts = document.querySelectorAll('#imageProgress, #quickImageProgress');
     progressTexts.forEach(element => {
         if (element) {
@@ -436,28 +243,20 @@ async function nextImage() {
         }
     });
     
-    // 3. 다음 이미지로 이동
     if (nextIndex < labelingState.totalImages) {
+        // 0.5초 후 다음 이미지로 이동 (사용자가 진행률 변화를 볼 수 있도록)
         setTimeout(() => {
             window.location.href = `/labeling/${labelingState.batchId}/?index=${nextIndex}`;
-        }, 200);
+        }, 500);
     } else {
-        // 배치 완료 시 캐시 정리
-        CacheManager.cleanup(labelingState.batchId);
         alert('배치가 완료되었습니다!');
         window.location.href = '/dashboard/';
     }
 }
 
-async function previousImage() {
+function previousImage() {
     console.log('previousImage 호출됨');
     if (labelingState.currentIndex > 0) {
-        // 1. 현재 작업 자동 저장
-        if (labelingState.selectedLabels.length > 0) {
-            await labelingState.autoSaveToServer();
-        }
-        
-        // 2. 이전 이미지로 이동 (저장된 라벨이 자동 복원됨)
         const prevIndex = labelingState.currentIndex - 1;
         window.location.href = `/labeling/${labelingState.batchId}/?index=${prevIndex}`;
     }
@@ -466,17 +265,16 @@ async function previousImage() {
 async function skipImage() {
     console.log('skipImage 호출됨');
     
-    // 1. 보류 상태로 저장
-    labelingState.selectedLabels = ['skipped'];
-    CacheManager.saveLabels(labelingState.batchId, labelingState.currentImageId, ['skipped']);
-    await labelingState.saveLabelToServer(labelingState.currentImageId, ['skipped'], false);
+    // 보류도 하나의 라벨로 처리 (빈 배열로 저장)
+    const currentImageId = labelingState.getCurrentImageId();
+    await labelingState.saveLabelToServer(currentImageId, ['skipped']);
     
-    // 2. UI 초기화
+    labelingState.selectedLabels = [];
     document.querySelectorAll('.label-btn').forEach(btn => btn.classList.remove('selected'));
     
-    // 3. 다음 이미지로 이동
     const nextIndex = labelingState.currentIndex + 1;
     if (nextIndex < labelingState.totalImages) {
+        // 진행률 업데이트
         const newProgress = Math.round((nextIndex / labelingState.totalImages) * 100);
         const progressFill = document.querySelector('.progress-fill');
         if (progressFill) {
@@ -485,101 +283,31 @@ async function skipImage() {
         
         setTimeout(() => {
             window.location.href = `/labeling/${labelingState.batchId}/?index=${nextIndex}`;
-        }, 200);
+        }, 300);
     } else {
-        CacheManager.cleanup(labelingState.batchId);
         alert('배치가 완료되었습니다!');
         window.location.href = '/dashboard/';
     }
 }
 
-// 자동저장 진행상황 모달 생성
-function createAutoSaveModal() {
-    const modal = document.createElement('div');
-    modal.id = 'autoSaveModal';
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0, 0, 0, 0.5); display: flex; align-items: center;
-        justify-content: center; z-index: 10000;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    `;
-    
-    modal.innerHTML = `
-        <div style="background: white; border-radius: 12px; padding: 30px;
-                    max-width: 400px; width: 90%; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-                    text-align: center; animation: modalSlideIn 0.3s ease-out;">
-            <div style="font-size: 48px; margin-bottom: 20px;">💾</div>
-            <h3 style="margin: 0 0 15px 0; color: #333; font-size: 20px;">
-                자동저장 내역 업데이트 중...
-            </h3>
-            <p style="margin: 0 0 25px 0; color: #666; font-size: 14px;">
-                현재까지의 작업 내용을 서버에 동기화하고 있습니다.
-            </p>
-            <div style="display: flex; justify-content: center; margin-bottom: 20px;">
-                <div style="width: 40px; height: 40px; border: 4px solid #f3f3f3; 
-                           border-top: 4px solid #007bff; border-radius: 50%; 
-                           animation: spin 1s linear infinite;"></div>
-            </div>
-            <div style="display: flex; gap: 8px; justify-content: center;">
-                <button id="waitForSave" style="background: #007bff; color: white; border: none;
-                        padding: 12px 20px; border-radius: 6px; cursor: pointer; font-size: 14px;
-                        font-weight: 500;">잠시만 기다려주세요...</button>
-            </div>
-        </div>
-    `;
-    
-    // 회전 애니메이션 CSS 추가
-    if (!document.getElementById('spinAnimationCSS')) {
-        const style = document.createElement('style');
-        style.id = 'spinAnimationCSS';
-        style.textContent = `
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-            @keyframes modalSlideIn {
-                from { opacity: 0; transform: scale(0.9) translateY(-10px); }
-                to { opacity: 1; transform: scale(1) translateY(0); }
-            }
-        `;
-        document.head.appendChild(style);
-    }
-    
-    document.body.appendChild(modal);
-    return modal;
+function saveProgress() {
+    console.log('saveProgress 호출됨');
+    labelingState.saveProgress();
 }
 
-// 홈으로 가기 (자동저장 후 이동)
-async function goHome() {
-    console.log('goHome 호출됨 - 자동저장 후 이동');
-    
-    // 1. 자동저장 모달 표시
-    const modal = createAutoSaveModal();
-    
-    try {
-        // 2. 현재 작업 자동 저장
-        if (labelingState.selectedLabels.length > 0) {
-            await labelingState.autoSaveToServer();
-        }
-        
-        // 3. 미저장 데이터 동기화
-        await labelingState.syncUnsavedData();
-        
-        // 4. 잠시 대기 후 이동 (사용자가 저장 과정을 인지할 수 있도록)
-        setTimeout(() => {
-            modal.remove();
-            window.location.href = '/dashboard/';
-        }, 1500);
-        
-    } catch (error) {
-        console.error('자동저장 실패:', error);
-        modal.remove();
-        
-        // 저장 실패 시에도 이동 (로컬 캐시에 보관됨)
-        const confirmLeave = confirm('자동저장에 실패했지만 로컬에 보관되었습니다. 대시보드로 이동하시겠습니까?');
-        if (confirmLeave) {
+function goHome() {
+    console.log('goHome 호출됨');
+    if (labelingState.isChanged && labelingState.isChanged()) {
+        const choice = confirm('변경사항이 있습니다.\n\n"확인"을 누르면 저장 후 홈으로 이동\n"취소"를 누르면 변경사항을 버리고 홈으로 이동');
+        if (choice) {
+            labelingState.saveProgress().then(() => {
+                window.location.href = '/dashboard/';
+            });
+        } else {
             window.location.href = '/dashboard/';
         }
+    } else {
+        window.location.href = '/dashboard/';
     }
 }
 
@@ -620,39 +348,24 @@ document.addEventListener('keydown', function(event) {
 
 // 페이지 로드 시 초기화
 document.addEventListener('DOMContentLoaded', function() {
-    // 강화된 캐싱 시스템 초기화
-    labelingState.initialize();
+    // 이전에 선택된 라벨이 있다면 복원
+    const imageId = labelingState.getCurrentImageId();
+    if (labelingState.labels[imageId]) {
+        labelingState.selectedLabels = [...labelingState.labels[imageId]];
+        labelingState.selectedLabels.forEach(label => {
+            const btn = document.querySelector(`[data-label="${label}"]`);
+            if (btn) btn.classList.add('selected');
+        });
+    }
     
-    // 페이지 벗어나기 전 자동 저장
-    window.addEventListener('beforeunload', async function(e) {
-        // 현재 작업 내용이 있으면 즉시 저장 시도
-        if (labelingState.selectedLabels.length > 0) {
-            // 동기 방식으로 빠르게 저장 (beforeunload에서는 async 사용 제한)
-            try {
-                navigator.sendBeacon('/api/labeling/save-label', JSON.stringify({
-                    imageId: labelingState.currentImageId,
-                    labels: labelingState.selectedLabels
-                }));
-            } catch (error) {
-                console.log('Beacon 저장 실패, 로컬 캐시 유지:', error);
-            }
+    // 페이지 벗어나기 전 경고
+    window.addEventListener('beforeunload', function(e) {
+        if (labelingState.isChanged()) {
+            e.preventDefault();
+            e.returnValue = '저장되지 않은 변경사항이 있습니다. 정말 페이지를 벗어나시겠습니까?';
+            return e.returnValue;
         }
     });
-    
-    // 페이지 가시성 변경 시 자동 저장
-    document.addEventListener('visibilitychange', function() {
-        if (document.hidden && labelingState.selectedLabels.length > 0) {
-            // 페이지가 숨겨질 때 자동 저장
-            labelingState.autoSaveToServer();
-        }
-    });
-    
-    // 주기적으로 연결 상태 확인 및 동기화 (5분마다)
-    setInterval(async () => {
-        if (navigator.onLine) {
-            await labelingState.syncUnsavedData();
-        }
-    }, 300000);
 });
 </script>
 {% endblock %}

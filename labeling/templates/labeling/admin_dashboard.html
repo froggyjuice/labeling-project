@@ -33,43 +33,23 @@
         <div class="admin-dashboard">
             <!-- Google Drive 권한 상태 섹션 -->
             <div class="section">
-                <h3>🔒 Google Drive 인증 상태</h3>
-                
-                <!-- 디버깅 정보 (개발용) -->
-                <div style="background: #f0f0f0; padding: 0.5rem; margin: 0.5rem 0; font-size: 0.8rem; border-radius: 4px;">
-                    🔧 디버깅: drive_credentials_available = {{ drive_credentials_available|default:"None" }}
-                    | session.drive_credentials = {% if 'drive_credentials' in request.session %}있음{% else %}없음{% endif %}
-                </div>
-                
+                <h3>Google Drive 권한 상태</h3>
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
-                    {% if drive_credentials_available %}
-                        <span style="font-size: 1.2rem;">✅</span>
-                        <h4 style="margin: 0; color: #27ae60;">인증 완료</h4>
-                    {% else %}
-                        <span style="font-size: 1.2rem;">❌</span>
-                        <h4 style="margin: 0; color: #e74c3c;">인증 필요</h4>
-                    {% endif %}
+                    <span style="font-size: 1.2rem;">{% if 'drive_credentials' in request.session %}✅{% else %}⚠️{% endif %}</span>
+                    <h4 style="margin: 0; color: {% if 'drive_credentials' in request.session %}#27ae60{% else %}#f39c12{% endif %};">
+                        Google Drive 권한 상태
+                    </h4>
                 </div>
-                
-                {% if drive_credentials_available %}
-                    <div style="background: #d5edda; border: 1px solid #c3e6cb; padding: 1rem; border-radius: 4px; margin: 1rem 0;">
-                        <strong>✅ Google Drive 인증 완료</strong><br>
-                        이미지 프록시 서비스가 정상 작동 중입니다. 사용자들이 이미지를 정상적으로 볼 수 있습니다.
-                    </div>
+                {% if 'drive_credentials' in request.session %}
+                    <p style="margin: 0; color: #27ae60;">✓ Google Drive 권한이 활성화되어 있습니다. 이미지 프록시가 정상 작동합니다.</p>
                 {% else %}
-                    <div style="background: #f8d7da; border: 1px solid #f5c6cb; padding: 1rem; border-radius: 4px; margin: 1rem 0;">
-                        <strong>❌ Google Drive 인증 필요</strong><br>
-                        <span style="color: #721c24;">이미지가 "이미지 없음"으로 표시되는 경우 Google Drive 재인증이 필요합니다.</span><br>
-                        서버 재시작 또는 세션 만료로 인해 인증이 해제되었을 수 있습니다.
-                        <br><br>
-                        <a href="{% url 'google_drive_auth_start' %}" 
-                           style="background: #007bff; color: white; padding: 0.75rem 1.5rem; border-radius: 4px; text-decoration: none; display: inline-block; font-weight: bold;">
-                           🔄 Google Drive 재인증하기
-                        </a>
-                        <br><small style="color: #6c757d; margin-top: 0.5rem; display: block;">
-                            (또는 관리자 권한으로 다시 로그인: <a href="{% url 'google_admin_login_start' %}">여기 클릭</a>)
-                        </small>
-                    </div>
+                    <p style="margin: 0 0 1rem 0; color: #e67e22;">
+                        ⚠️ Google Drive 권한이 설정되지 않았습니다. 사용자들이 이미지를 볼 수 없을 수 있습니다.
+                    </p>
+                    <a href="{% url 'google_admin_login_start' %}" 
+                       style="background: #3498db; color: white; padding: 0.5rem 1rem; border-radius: 4px; text-decoration: none; display: inline-block;">
+                       🔗 Google Drive 권한으로 다시 로그인
+                    </a>
                 {% endif %}
             </div>
 
@@ -249,39 +229,6 @@
                 <div class="section-actions">
                     <a href="{% url 'drive_import' %}" class="btn">새 배치 생성</a>
                 </div>
-                
-                <!-- 배치 상태 요약 -->
-                <div class="batch-status-summary" style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 15px 0;">
-                    <h4 style="margin: 0 0 10px 0; color: #2c3e50;">📊 배치 상태 요약</h4>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
-                        <div class="stat-item">
-                            <span class="stat-number" style="font-size: 24px; font-weight: bold; color: #3498db;">{{ batch_stats.total_batches }}</span>
-                            <span class="stat-label" style="display: block; color: #7f8c8d;">전체 배치</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number" style="font-size: 24px; font-weight: bold; color: #27ae60;">{{ batch_stats.active_batches }}</span>
-                            <span class="stat-label" style="display: block; color: #7f8c8d;">활성 배치</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-number" style="font-size: 24px; font-weight: bold; color: #e67e22;">{{ batch_stats.inactive_batches }}</span>
-                            <span class="stat-label" style="display: block; color: #7f8c8d;">비활성 배치</span>
-                        </div>
-                    </div>
-                    
-                    {% if batch_stats.inactive_batches > 0 %}
-                    <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px;">
-                        <strong>⚠️ 알림:</strong> {{ batch_stats.inactive_batches }}개의 비활성 배치가 있습니다. 
-                        사용자 모드에서는 활성 배치만 표시됩니다.
-                    </div>
-                    {% endif %}
-                    
-                    {% if batch_stats.active_batches == 0 %}
-                    <div style="margin-top: 15px; padding: 10px; background: #f8d7da; border-left: 4px solid #dc3545; border-radius: 4px;">
-                        <strong>🚨 중요:</strong> 활성화된 배치가 없습니다! 
-                        사용자들이 라벨링할 수 있는 배치가 없는 상태입니다.
-                    </div>
-                    {% endif %}
-                </div>
                 {% if batches_with_info %}
                     <div class="batch-cards">
                         {% for batch_info in batches_with_info %}
@@ -394,7 +341,7 @@
                                         <div class="failure-message">{{ failure.error_message }}</div>
                                         <div class="failure-ip">IP: {{ failure.ip_address }}</div>
                                     </div>
-                                    {% endfor %}
+  {% endfor %}
                                 </div>
                             {% else %}
                                 <div class="no-data">실패한 요청이 없습니다.</div>

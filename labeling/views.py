@@ -7,7 +7,6 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Batch, Image, Label, LabelingResult, ImageAccessLog, Message
-from .thumbnail_utils import get_batch_thumbnail_url, validate_batch_thumbnails, check_thumbnail_system_health
 from django.views.decorators.csrf import csrf_exempt
 from django.db import models
 import json
@@ -97,9 +96,6 @@ def admin_dashboard(request):
     if request.user.role != 'admin':
         return redirect('dashboard')
     
-    # Google Drive 인증 상태 확인
-    drive_credentials_available = 'drive_credentials' in request.session
-    
     batches = Batch.objects.prefetch_related('images').all().order_by('-created_at')
     
     # 승인 대기 중인 사용자들
@@ -107,16 +103,11 @@ def admin_dashboard(request):
     User = get_user_model()
     pending_users = User.objects.filter(role='user', is_approved=False).order_by('-date_joined')
     
-    # 배치 상태 통계 추가
-    all_batches_count = Batch.objects.count()
-    active_batches_count = batches.count()
-    inactive_batches_count = Batch.objects.filter(is_active=False).count()
-
-    # 배치별 썸네일 정보 추가 (안전한 썸네일 시스템 사용)
+    # 배치별 썸네일 정보 추가
     batches_with_info = []
     for batch in batches:
-        # 안전한 썸네일 URL 생성
-        thumbnail_url = get_batch_thumbnail_url(batch)
+        first_image = batch.images.first()
+        thumbnail_url = first_image.url if first_image else None
         
         # 배치별 전체 진행률 계산
         total_images = batch.images.count()
@@ -204,13 +195,7 @@ def admin_dashboard(request):
         'pending_users': pending_users,
         'user_stats': user_stats,
         'security_stats': security_stats,
-        'message_stats': message_stats,
-        'batch_stats': {
-            'total_batches': all_batches_count,
-            'active_batches': active_batches_count,
-            'inactive_batches': inactive_batches_count
-        },
-        'drive_credentials_available': drive_credentials_available
+        'message_stats': message_stats
     }
     return render(request, 'labeling/admin_dashboard.html', context)
 
@@ -227,9 +212,6 @@ def dashboard(request):
     # 승인되지 않은 사용자는 대기 페이지로 리다이렉트
     if not request.user.is_approved:
         return redirect('waiting')
-    
-    # Google Drive 인증 상태 확인
-    drive_credentials_available = 'drive_credentials' in request.session
     
     # 활성화된 배치만 표시
     batches = Batch.objects.filter(is_active=True)
@@ -251,8 +233,8 @@ def dashboard(request):
         progress_percentage = (batch_completed / batch_total * 100) if batch_total > 0 else 0
         is_completed = batch_completed >= batch_total
         
-        # 안전한 썸네일 URL 생성 (전용 유틸리티 사용)
-        thumbnail_url = get_batch_thumbnail_url(batch)
+        # 첫 번째 이미지를 썸네일로 사용
+        thumbnail_url = batch_images.first().url if batch_images.exists() else None
         
         batch_data.append({
             "id": batch.id,
@@ -269,10 +251,6 @@ def dashboard(request):
     
     overall_progress = (completed_images / total_images * 100) if total_images > 0 else 0
     
-    # 배치 상태 정보 추가
-    all_batches = Batch.objects.all()
-    inactive_batches = Batch.objects.filter(is_active=False)
-    
     context = {
         "batches": batch_data,
         "batches_json": batch_data,
@@ -281,13 +259,6 @@ def dashboard(request):
         "overall_progress": overall_progress,
         "google_user_info": request.session.get('google_user_info', {}),
         "user_role": request.user.role,
-        "batch_info": {
-            "has_active_batches": batches.exists(),
-            "total_batches": all_batches.count(),
-            "inactive_batches": inactive_batches.count(),
-            "inactive_batch_names": [batch.name for batch in inactive_batches[:3]]  # 최대 3개만 표시
-        },
-        "drive_credentials_available": drive_credentials_available
     }
     
     return render(request, "labeling/dashboard.html", context)
@@ -319,7 +290,7 @@ def labeling(request, batch_id):
             "user_id": request.user.id,
         }
         
-        return render(request, "labeling/labeling.html", context)
+        return render(request, "labeling/labeling_simple.html", context)
         
     except Batch.DoesNotExist:
         messages.error(request, "배치를 찾을 수 없습니다.")
@@ -920,19 +891,13 @@ def list_drive_folder_files(request):
 
 @csrf_exempt
 def create_batch_from_drive_files(request, folder_id):
-    """Google Drive 폴더에서 배치 생성 (분할 배치 지원 + 랜덤 샘플링)"""
+    """Google Drive 폴더에서 배치 생성 (분할 배치 지원)"""
     try:
         from django.utils import timezone
-        import random
         
         batch_name_prefix = request.POST.get('batch_name_prefix', 'Google Drive 배치')
         split_method = request.POST.get('split_method', 'single')
         split_value = int(request.POST.get('split_value', 0)) if request.POST.get('split_value') else 0
-        
-        # 테스트 모드 파라미터
-        test_mode = request.POST.get('test_mode', 'false').lower() == 'true'
-        random_seed = int(request.POST.get('random_seed', 42)) if request.POST.get('random_seed') else 42
-        max_images = int(request.POST.get('max_images', 50)) if request.POST.get('max_images') else 50
         
         if 'drive_credentials' not in request.session:
             return JsonResponse({'error': 'Not authenticated'}, status=401)
@@ -953,23 +918,6 @@ def create_batch_from_drive_files(request, folder_id):
         if not files:
             return JsonResponse({'error': '폴더에 이미지 파일이 없습니다.'}, status=400)
         
-        # 테스트 모드: 랜덤 샘플링
-        if test_mode:
-            print(f"[INFO] 테스트 모드 활성화 - Seed: {random_seed}, 최대 이미지: {max_images}")
-            random.seed(random_seed)  # 재현 가능한 랜덤 시드 설정
-            
-            if len(files) > max_images:
-                files = random.sample(files, max_images)
-                print(f"[INFO] 랜덤 샘플링: {len(files)}개 이미지 선택됨 (전체 {len(results.get('files', []))}개 중)")
-                
-                # 테스트 모드 배치명에 표시
-                if batch_name_prefix == 'Google Drive 배치':
-                    batch_name_prefix = f'테스트_{batch_name_prefix}_seed{random_seed}'
-                else:
-                    batch_name_prefix = f'테스트_{batch_name_prefix}_seed{random_seed}'
-            else:
-                print(f"[INFO] 폴더 이미지 수({len(files)})가 최대값({max_images})보다 적어 전체 사용")
-        
         # 분할 방식에 따라 배치 생성
         created_batches = []
         
@@ -981,22 +929,22 @@ def create_batch_from_drive_files(request, folder_id):
             )
             
             for file in files:
-                # 프록시 URL 생성 (Render 호환)
-                proxy_url = download_and_save_image(service, file['id'], file['name'], batch.id)
-                if proxy_url:
+                # 이미지를 Django 서버에 다운로드해서 저장
+                local_url = download_and_save_image(service, file['id'], file['name'], batch.id)
+                if local_url:
                     Image.objects.create(
                         batch=batch,
                         file_name=file['name'],
-                        url=proxy_url,
+                        url=local_url,
                         drive_file_id=file['id']
                     )
                 else:
-                    # 프록시 URL 생성 실패 시 기본 프록시 URL 사용
-                    fallback_url = f"/proxy/drive/{file['id']}/"
+                    # 다운로드 실패 시 프록시 URL 사용
+                    display_url = f"/proxy-drive-image/{file['id']}/"
                     Image.objects.create(
                         batch=batch,
                         file_name=file['name'],
-                        url=fallback_url,
+                        url=display_url,
                         drive_file_id=file['id']
                     )
             
@@ -1023,22 +971,22 @@ def create_batch_from_drive_files(request, folder_id):
                 )
                 
                 for file in batch_files:
-                    # 프록시 URL 생성 (Render 호환)
-                    proxy_url = download_and_save_image(service, file['id'], file['name'], batch.id)
-                    if proxy_url:
+                    # 이미지를 Django 서버에 다운로드해서 저장
+                    local_url = download_and_save_image(service, file['id'], file['name'], batch.id)
+                    if local_url:
                         Image.objects.create(
                             batch=batch,
                             file_name=file['name'],
-                            url=proxy_url,
+                            url=local_url,
                             drive_file_id=file['id']
                         )
                     else:
-                        # 프록시 URL 생성 실패 시 기본 프록시 URL 사용
-                        fallback_url = f"/proxy/drive/{file['id']}/"
+                        # 다운로드 실패 시 프록시 URL 사용
+                        display_url = f"/proxy-drive-image/{file['id']}/"
                         Image.objects.create(
                             batch=batch,
                             file_name=file['name'],
-                            url=fallback_url,
+                            url=display_url,
                             drive_file_id=file['id']
                         )
                 
@@ -1068,22 +1016,22 @@ def create_batch_from_drive_files(request, folder_id):
                 )
                 
                 for file in batch_files:
-                    # 프록시 URL 생성 (Render 호환)
-                    proxy_url = download_and_save_image(service, file['id'], file['name'], batch.id)
-                    if proxy_url:
+                    # 이미지를 Django 서버에 다운로드해서 저장
+                    local_url = download_and_save_image(service, file['id'], file['name'], batch.id)
+                    if local_url:
                         Image.objects.create(
                             batch=batch,
                             file_name=file['name'],
-                            url=proxy_url,
+                            url=local_url,
                             drive_file_id=file['id']
                         )
                     else:
-                        # 프록시 URL 생성 실패 시 기본 프록시 URL 사용
-                        fallback_url = f"/proxy/drive/{file['id']}/"
+                        # 다운로드 실패 시 프록시 URL 사용
+                        display_url = f"/proxy-drive-image/{file['id']}/"
                         Image.objects.create(
                             batch=batch,
                             file_name=file['name'],
-                            url=fallback_url,
+                            url=display_url,
                             drive_file_id=file['id']
                         )
                 
@@ -1116,22 +1064,28 @@ def create_batch_from_drive_files(request, folder_id):
         return JsonResponse({'error': str(e)}, status=500)
 
 def download_and_save_image(service, file_id, file_name, batch_id):
-    """Google Drive 이미지를 프록시 URL로 반환 (Render 호환)"""
+    """Google Drive 이미지를 다운로드해서 Django media 폴더에 저장"""
     try:
-        # Render는 읽기 전용 파일 시스템이므로 프록시 방식 사용
-        # 파일 존재 여부 확인 (선택적)
-        try:
-            file_metadata = service.files().get(fileId=file_id, fields='id,name,mimeType').execute()
-            print(f"[INFO] 프록시 이미지 설정: {file_name} (ID: {file_id})")
-        except Exception as e:
-            print(f"[WARNING] 파일 메타데이터 확인 실패 {file_id}: {str(e)}")
+        # media/batch_images/{batch_id}/ 디렉토리 생성
+        batch_dir = f"batch_images/{batch_id}"
+        os.makedirs(os.path.join(settings.MEDIA_ROOT, batch_dir), exist_ok=True)
         
-        # 프록시 URL 반환 (다운로드 없이 직접 서빙)
-        proxy_url = f"/proxy/drive/{file_id}/"
-        return proxy_url
+        # 파일 확장자 추출
+        file_extension = os.path.splitext(file_name)[1] or '.jpg'
+        safe_filename = f"{uuid.uuid4().hex}{file_extension}"
+        
+        # Google Drive에서 파일 다운로드
+        file_content = service.files().get_media(fileId=file_id).execute()
+        
+        # Django storage에 저장
+        file_path = f"{batch_dir}/{safe_filename}"
+        saved_path = default_storage.save(file_path, ContentFile(file_content))
+        
+        # URL 반환
+        return f"/media/{saved_path}"
         
     except Exception as e:
-        print(f"[ERROR] 프록시 URL 생성 실패 {file_id}: {str(e)}")
+        print(f"이미지 다운로드 실패 {file_id}: {str(e)}")
         return None
 
 def drive_import(request):
@@ -1240,10 +1194,7 @@ def proxy_drive_image(request, file_id):
     try:
         # 4. 먼저 로컬에 다운로드된 이미지가 있는지 확인
         try:
-            # 중복 Image 객체 처리: get() 대신 filter().first() 사용
-            image_obj = Image.objects.filter(drive_file_id=file_id).first()
-            if not image_obj:
-                raise Image.DoesNotExist
+            image_obj = Image.objects.get(drive_file_id=file_id)
             if image_obj.url and image_obj.url.startswith('/media/'):
                 # 로컬 파일이 존재하는지 확인
                 local_path = os.path.join(settings.MEDIA_ROOT, image_obj.url.replace('/media/', ''))

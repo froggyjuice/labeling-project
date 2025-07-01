@@ -49,16 +49,11 @@
                 {% if batches %}
                     {% for batch in batches %}
                     <div class="batch-card {% if batch.is_completed %}completed{% endif %}">
+                        {% if batch.thumbnail_url %}
                         <div class="batch-thumbnail">
-                            {% if batch.thumbnail_url %}
-                                <img src="{{ batch.thumbnail_url }}" alt="배치 썸네일" loading="lazy" 
-                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                            {% endif %}
-                            <div class="thumbnail-placeholder" style="{% if batch.thumbnail_url %}display: none;{% endif %}">
-                                <span>📁</span>
-                                <span>이미지 없음</span>
-                            </div>
+                            <img src="{{ batch.thumbnail_url }}" alt="배치 썸네일" loading="lazy">
                         </div>
+                        {% endif %}
                         <div class="batch-content" onclick="location.href='{% url 'labeling' batch.id %}'">
                         <h4>{{ batch.name }}</h4>
                         <p>{{ batch.completed_images }} / {{ batch.total_images }} 완료</p>
@@ -80,51 +75,12 @@
                     </div>
                     {% endfor %}
                 {% else %}
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
-                        <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 30px; max-width: 500px; margin: 0 auto;">
-                            <h3 style="color: #856404; margin: 0 0 15px 0;">⚠️ 활성화된 배치가 없습니다</h3>
-                            <p style="color: #856404; margin: 0 0 20px 0;">현재 라벨링할 수 있는 배치가 없습니다.</p>
-                            
-                            {% if batch_info.inactive_batches > 0 %}
-                            <div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 6px; padding: 20px; margin: 20px 0;">
-                                <strong style="color: #0c5460;">💡 해결 방법:</strong>
-                                <p style="color: #0c5460; margin: 10px 0;">관리자에게 다음 배치들을 활성화해달라고 요청하세요:</p>
-                                <ul style="margin: 10px 0 0 0; padding-left: 20px; text-align: left; color: #0c5460;">
-                                    {% for batch_name in batch_info.inactive_batch_names %}
-                                    <li>{{ batch_name }}</li>
-                                    {% endfor %}
-                                    {% if batch_info.inactive_batches > 3 %}
-                                    <li>그 외 {{ batch_info.inactive_batches|add:"-3" }}개...</li>
-                                    {% endif %}
-                                </ul>
-                            </div>
-                            {% else %}
-                            <div style="background: #d1ecf1; border: 1px solid #bee5eb; border-radius: 6px; padding: 20px; margin: 20px 0;">
-                                <strong style="color: #0c5460;">💡 해결 방법:</strong>
-                                <p style="color: #0c5460; margin: 10px 0 0 0;">관리자에게 새로운 배치를 생성해달라고 요청하세요.</p>
-                            </div>
-                            {% endif %}
-                            
-                            <button onclick="openMessageModal('global')" style="background: #17a2b8; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 15px;">
-                                📧 관리자에게 문의하기
-                            </button>
-                        </div>
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: #666;">
+                        <h3>배치가 없습니다</h3>
+                        <p>관리자가 배치를 생성할 때까지 기다려주세요.</p>
                     </div>
                 {% endif %}
             </div>
-
-            <!-- Google Drive 인증 상태 알림 (사용자용) -->
-            {% if not drive_credentials_available %}
-            <div class="section">
-                <div style="background: #fff3cd; border: 1px solid #ffeaa7; padding: 1rem; border-radius: 8px; margin-bottom: 1.5rem; text-align: center;">
-                    <h3 style="color: #856404; margin: 0 0 0.5rem 0;">⚠️ 이미지 로딩 문제 안내</h3>
-                    <p style="color: #856404; margin: 0;">
-                        현재 관리자의 Google Drive 인증이 필요한 상태입니다.<br>
-                        이미지가 "이미지 없음"으로 표시되는 경우, 하단의 <strong>"관리자에게 문의하기"</strong> 버튼을 눌러 관리자에게 알려주세요.
-                    </p>
-                </div>
-            </div>
-            {% endif %}
         </div>
     </div>
 </div>
@@ -167,27 +123,6 @@
 /* 배치 카드 메시지 버튼 스타일 */
 .batch-card {
     position: relative;
-}
-
-/* 썸네일 placeholder 스타일 */
-.thumbnail-placeholder {
-    width: 100%;
-    height: 150px;
-    background: #f8f9fa;
-    border: 2px dashed #dee2e6;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.9rem;
-    color: #6c757d;
-    text-align: center;
-    border-radius: 8px;
-}
-
-.thumbnail-placeholder span:first-child {
-    font-size: 2rem;
-    margin-bottom: 5px;
 }
 
 .batch-message-btn {
@@ -261,111 +196,6 @@
 
 .modal-body {
     padding: 20px;
-}
-
-/* 모바일 최적화 */
-@media (max-width: 768px) {
-    .nav-right {
-        flex-direction: column;
-        gap: 8px;
-        width: 100%;
-    }
-    
-    .user-info {
-        text-align: center;
-        order: -1;
-    }
-    
-    .nav-right > a,
-    .nav-right > button {
-        width: 100%;
-        text-align: center;
-        justify-content: center;
-    }
-}
-
-@media (max-width: 480px) {
-    .nav-header {
-        padding: 10px;
-    }
-    
-    .nav-right {
-        gap: 6px;
-    }
-    
-    .nav-right > a,
-    .nav-right > button {
-        padding: 10px 16px;
-        font-size: 0.85rem;
-    }
-    
-    .user-info {
-        padding: 8px;
-        font-size: 0.9rem;
-    }
-    
-    .user-info > div > div:first-child {
-        font-size: 0.95rem;
-        font-weight: 500;
-    }
-    
-    .user-info > div > div:last-child {
-        font-size: 0.75rem;
-    }
-    
-    .batch-message-btn {
-        width: 35px;
-        height: 35px;
-        font-size: 16px;
-        top: 8px;
-        right: 8px;
-    }
-    
-    .modal-content {
-        margin: 2% auto;
-        width: 95%;
-        max-height: 95vh;
-        overflow-y: auto;
-    }
-    
-    .modal-header {
-        padding: 15px;
-    }
-    
-    .modal-header h3 {
-        font-size: 1.2rem;
-    }
-    
-    .modal-body {
-        padding: 15px;
-    }
-    
-    .form-group label {
-        font-size: 0.9rem;
-        margin-bottom: 6px;
-    }
-    
-    .form-group input[type="text"],
-    .form-group textarea {
-        font-size: 16px; /* iOS 줌 방지 */
-        padding: 12px;
-        border-radius: 6px;
-    }
-    
-    .form-group textarea {
-        min-height: 120px;
-    }
-    
-    .form-actions {
-        margin-top: 20px;
-        gap: 10px;
-    }
-    
-    .form-actions .btn {
-        flex: 1;
-        padding: 12px;
-        font-size: 0.9rem;
-    }
 }
 
 .form-group {
