@@ -63,7 +63,7 @@ docker-compose -f docker-compose.dev.yml up --build
 ### 문제 1: 로딩 속도 느림
 - **증상**: 로그인/대시보드 페이지 로딩이 5-10초 걸림 
 - **원인**: DB 쿼리 최적화 부족, 캐싱 미흡 (Render cold start 문제라고 하는데 괜찮을 때도 있는듯함..?)
-- **테스트**: http://localhost:8000/login/ 또는 https://labeling-project-web.onrender.com/login/ 접속 후 로딩 시간 측정
+- **테스트**: http://localhost:8000/login/(로컬 실행) 또는 https://labeling-project-web.onrender.com/login/ 접속 후 로딩 시간 측정
 
 ### 문제 2: Google Drive 연동 불안정
 - **증상**: OAuth 인증 실패, 이미지 로딩 실패 (관리자 모드에서는 Drive 권한이 있어 이미지가 보이는데, 사용자 모드에서는 보이지 않는 문제)
@@ -143,7 +143,7 @@ LOGGING = {
 ## 💡 간단한 테스트 시나리오
 
 ### 테스트 1: 기본 로딩 속도
-1. http://localhost:8000 또는 https://labeling-project-web.onrender.com/login/ 접속
+1. http://localhost:8000 접속
 2. 로그인 페이지 로딩 시간 측정
 3. 대시보드 로딩 시간 측정
 
