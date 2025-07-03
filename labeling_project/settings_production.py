@@ -59,13 +59,6 @@ DATABASES = {
     )
 }
 
-# 수동으로 추가 옵션 설정
-if 'default' in DATABASES:
-    DATABASES['default'].setdefault('OPTIONS', {})
-    DATABASES['default']['OPTIONS'].update({
-        'MAX_CONNS': 20,  # 최대 연결 수
-        'MIN_CONNS': 5,   # 최소 연결 수
-    })
 
 # 필수: 정적 파일 설정 (프로덕션)
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
