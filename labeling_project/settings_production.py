@@ -45,10 +45,6 @@ DATABASES = {
         default=f"postgresql://{os.environ.get('DB_USER', 'postgres')}:{os.environ.get('DB_PASSWORD', '')}@{os.environ.get('DB_HOST', 'localhost')}:{os.environ.get('DB_PORT', '5432')}/{os.environ.get('DB_NAME', 'labeling_project')}",
         conn_max_age=600,  # 연결 유지 시간 (10분)
         conn_health_checks=True,  # 연결 상태 확인
-        options={
-            'MAX_CONNS': 20,  # 최대 연결 수
-            'MIN_CONNS': 5,   # 최소 연결 수
-        }
     )
 }
 
