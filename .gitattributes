@@ -1,0 +1,30 @@
+# 줄바꿈 문자 자동 변환 설정
+* text=auto
+
+# 소스 코드 파일들 - LF 사용
+*.py text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.sh text eol=lf
+
+# 바이너리 파일들 - 변환하지 않음
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.sqlite3 binary
+
+# Windows 전용 파일들 - CRLF 사용
+*.bat text eol=crlf
+*.cmd text eol=crlf 

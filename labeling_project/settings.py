@@ -12,12 +12,6 @@ DEBUG = True
 ALLOWED_HOSTS = [
     'localhost',
     '127.0.0.1',
-    '*.ngrok.io',
-    '*.ngrok-free.app',  # 새로운 ngrok 도메인
-    '*.ngrok.app',
-    '.ngrok.io',  # 추가: 점으로 시작하는 패턴
-    '.ngrok-free.app',  # 추가: 점으로 시작하는 패턴  
-    '.ngrok.app',  # 추가: 점으로 시작하는 패턴
     '*',  # 개발 환경에서는 모든 도메인 허용 (보안상 프로덕션에서는 제거)
 ]
 
@@ -137,11 +131,8 @@ ADMIN_WHITELIST = [
     'ocean3251@gmail.com',
 ]
 
-# CSRF 보안 설정 (ngrok 도메인 허용)
+# CSRF 보안 설정
 CSRF_TRUSTED_ORIGINS = [
-    'https://*.ngrok.io',
-    'https://*.ngrok-free.app',
-    'https://*.ngrok.app',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
 ]
@@ -160,11 +151,10 @@ MESSAGE_TAGS = {
     messages.ERROR: 'error',
 }
 
-# Google OAuth 설정 (환경변수에서 읽기)
-GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
-GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
+# Google IAM 서비스 계정 설정
+GOOGLE_SERVICE_ACCOUNT_KEY_PATH = os.getenv('GOOGLE_SERVICE_ACCOUNT_KEY_PATH', 'image-labeling-test-464107-ae81484b9900.json')
 
-# ngrok을 위한 추가 보안 설정
+# 추가 보안 설정
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_BROWSER_XSS_FILTER = True

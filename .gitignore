@@ -8,6 +8,8 @@ client_id.json
 API*.pptx
 *API*.pptx
 *.pptx
+image-labeling-test-464107-ae81484b9900.json
+*.json
 
 # Environment variables
 .env
@@ -58,13 +60,13 @@ wheels/
 .installed.cfg
 *.egg
 
-# Ngrok
-ngrok
-ngrok.exe
-ngrok.zip
-ngrok-v3.zip
-ngrok-v3/
-start_ngrok.*
+# Ngrok (더 이상 사용하지 않음)
+# ngrok
+# ngrok.exe
+# ngrok.zip
+# ngrok-v3.zip
+# ngrok-v3/
+# start_ngrok.*
 
 # Logs
 *.log

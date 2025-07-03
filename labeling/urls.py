@@ -23,11 +23,7 @@ urlpatterns = [
     path('api/labeling/load-progress/<int:user_id>/<int:batch_id>/', views.load_progress, name='load_progress'),
     path('api/labeling/batches/<int:user_id>/', views.get_batches, name='get_batches'),
     path('api/validate-user', views.validate_user, name='validate_user'),
-    # Google 소셜 로그인
-    path('google-user-login/', views.google_user_login_start, name='google_user_login_start'),
-    path('google-admin-login/', views.google_admin_login_start, name='google_admin_login_start'),
-    path('google-user-auth-callback/', views.google_user_auth_callback, name='google_user_auth_callback'),
-    path('google-admin-auth-callback/', views.google_admin_auth_callback, name='google_admin_auth_callback'),
+
     path('waiting/', views.waiting, name='waiting'),
     # 사용자 승인 관련
     path('approve-user/<int:user_id>/', views.approve_user, name='approve_user'),
@@ -37,9 +33,7 @@ urlpatterns = [
     path('batch/<int:batch_id>/toggle/', views.toggle_batch_active, name='toggle_batch_active'),
     path('batch/<int:batch_id>/delete/', views.delete_batch, name='delete_batch'),
     path('batch/<int:batch_id>/reset/', views.reset_batch_progress, name='reset_batch_progress'),
-    # Google Drive 인증 (기존 로그인된 사용자용)
-    path('google-drive-auth/', views.google_drive_auth_start, name='google_drive_auth_start'),
-    path('google-drive-auth-callback/', views.google_drive_auth_callback, name='google_drive_auth_callback'),
+
     path('drive-folder-files/', views.list_drive_folder_files, name='list_drive_folder_files'),
     path('drive-import/', views.drive_import, name='drive_import'),
     path('proxy-drive-image/<str:file_id>/', views.proxy_drive_image, name='proxy_drive_image'),
@@ -50,4 +44,6 @@ urlpatterns = [
     path('admin-messages/', views.admin_messages, name='admin_messages'),
     path('api/reply-message/', views.reply_message, name='reply_message'),
     path('api/mark-message-read/', views.mark_message_read, name='mark_message_read'),
+    # 서비스 계정 테스트
+    path('test-service-account/', views.test_service_account_view, name='test_service_account'),
 ]

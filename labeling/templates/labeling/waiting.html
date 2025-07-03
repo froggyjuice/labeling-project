@@ -2,6 +2,19 @@
 {% block content %}
 <div class="container">
     <div class="screen">
+        <!-- 네비게이션 헤더 -->
+        <div class="nav-header">
+            <div class="nav-left">
+                <div class="logo">📊 ImageLabel</div>
+                <div class="breadcrumb">
+                    <span class="breadcrumb-item active">승인 대기</span>
+                </div>
+            </div>
+            <div class="nav-right">
+                <a href="{% url 'logout' %}" class="btn btn-small">로그아웃</a>
+            </div>
+        </div>
+
         <div class="waiting-screen">
             <div class="waiting-content">
                 <div class="waiting-icon">⏳</div>
@@ -21,7 +34,7 @@
                 </div>
                 
                 <div class="waiting-actions">
-                    <a href="{% url 'login' %}" class="btn">로그인 페이지로 돌아가기</a>
+                    <a href="{% url 'logout' %}" class="btn btn-logout">로그아웃</a>
                 </div>
             </div>
         </div>
@@ -102,6 +115,10 @@
 
 .waiting-actions {
     margin-top: 40px;
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
 }
 
 .btn {
@@ -121,6 +138,15 @@
     box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
     text-decoration: none;
     color: white;
+}
+
+.btn-logout {
+    background: linear-gradient(135deg, #e74c3c, #c0392b);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+}
+
+.btn-logout:hover {
+    box-shadow: 0 8px 25px rgba(231, 76, 60, 0.6);
 }
 </style>
 {% endblock %}

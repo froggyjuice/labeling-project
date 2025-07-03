@@ -350,11 +350,11 @@
                 <tr class="{% if not message.is_read %}message-unread{% endif %}">
                     <td>
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            {% if message.sender.google_picture %}
-                                <img src="{{ message.sender.google_picture }}" alt="프로필" style="width: 32px; height: 32px; border-radius: 50%;">
-                            {% endif %}
+                            <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 14px;">
+                                {{ message.sender.username|first|upper }}
+                            </div>
                             <div>
-                                <div style="font-weight: 600;">{{ message.sender.google_name|default:message.sender.username }}</div>
+                                <div style="font-weight: 600;">{{ message.sender.username }}</div>
                                 <div style="font-size: 0.8rem; color: #666;">{{ message.sender.email }}</div>
                             </div>
                         </div>
@@ -386,10 +386,10 @@
                     <td>{{ message.created_at|date:"m/d H:i" }}</td>
                     <td>
                         <div class="action-buttons">
-                            <button class="btn-action btn-view" onclick="viewMessage({{ message.id }}, `{{ message.sender.google_name|default:message.sender.username }}`, `{{ message.content|escapejs }}`, `{{ message.admin_reply|escapejs }}`, `{{ message.created_at|date:'Y-m-d H:i' }}`, `{% if message.batch %}{{ message.batch.name }}{% endif %}`)">
+                            <button class="btn-action btn-view" onclick="viewMessage({{ message.id }}, `{{ message.sender.username }}`, `{{ message.content|escapejs }}`, `{{ message.admin_reply|escapejs }}`, `{{ message.created_at|date:'Y-m-d H:i' }}`, `{% if message.batch %}{{ message.batch.name }}{% endif %}`)">
                                 보기
                             </button>
-                            <button class="btn-action btn-reply" onclick="replyMessage({{ message.id }}, `{{ message.sender.google_name|default:message.sender.username }}`)">
+                            <button class="btn-action btn-reply" onclick="replyMessage({{ message.id }}, `{{ message.sender.username }}`)">
                                 답변
                             </button>
                             {% if not message.is_read %}

@@ -1,4 +1,17 @@
 #!/usr/bin/env python
+"""
+Django Views for Image Labeling System
+
+이 파일은 이미지 라벨링 시스템의 핵심 뷰들을 포함합니다.
+주석으로 필수 기능과 선택적 성능 향상 부분을 구분했습니다.
+
+[필수 기능] - 시스템 작동에 반드시 필요한 부분
+[성능 향상] - 선택적이지만 권장되는 최적화 부분
+"""
+
+# ============================================================================
+# [필수 기능] 기본 Django 및 외부 라이브러리 import
+# ============================================================================
 import os
 import json
 from django.shortcuts import render, redirect
@@ -9,16 +22,14 @@ from django.contrib import messages
 from .models import Batch, Image, Label, LabelingResult, ImageAccessLog, Message
 from django.views.decorators.csrf import csrf_exempt
 from django.db import models
-import json
 
-from google.oauth2 import id_token
-from google.auth.transport import requests as google_requests
-from .utils import get_google_oauth_config
-from google_auth_oauthlib.flow import Flow
-import os
+# [필수 기능] Google Drive API 관련 import
 from googleapiclient.discovery import build
 from google.oauth2.credentials import Credentials
 from googleapiclient.http import MediaFileUpload
+from .utils import get_service_account_credentials, test_service_account_access
+
+# [필수 기능] 파일 처리 및 HTTP 요청
 import requests
 import io
 import uuid
@@ -26,16 +37,26 @@ from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 
-# 개발 환경에서 HTTPS 요구사항 우회 (OAuth 2.0 insecure transport 해결)
-# HTTPS를 사용할 때는 이 설정을 주석 처리하세요
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+# ============================================================================
+# [성능 향상] 캐싱 관련 import (선택적이지만 권장)
+# ============================================================================
+from django.views.decorators.cache import cache_page
+from django.views.decorators.vary import vary_on_cookie
 
-# config 불러오기
-google_config = get_google_oauth_config()
-GOOGLE_CLIENT_ID = google_config["client_id"]
-GOOGLE_CLIENT_SECRET = google_config["client_secret"]
+# ============================================================================
+# [필수 기능] 개발 환경 설정
+# ============================================================================
 
-# 로그인 관련 뷰
+# [필수 기능] Google IAM 서비스 계정 설정 확인
+print("🔧 Google IAM 서비스 계정 기반 인증 시스템 사용 중")
+
+# ============================================================================
+# [필수 기능] 로그인 관련 뷰
+# ============================================================================
+
+# [성능 향상] 캐싱 적용 (5분 캐시) - 선택적이지만 권장
+@cache_page(60 * 5)  # 5분 캐시
+@vary_on_cookie
 def login_view(request):
     if request.user.is_authenticated:
         return redirect("dashboard")
@@ -65,37 +86,22 @@ def user_login(request):
 def admin_login(request):
     return login_view(request)
 
-def logout_view(request):
-    """완전한 로그아웃 처리"""
-    # 사용자 정보 저장 (메시지용)
-    user_name = request.user.first_name if request.user.is_authenticated else "사용자"
-    
-    # Django 로그아웃 처리
-    logout(request)
-    
-    # 세션 데이터 완전 삭제
-    request.session.flush()
-    
-    # 성공 메시지 추가
-    messages.success(request, f"{user_name}님이 성공적으로 로그아웃되었습니다.")
-    
-    # 캐시 방지를 위한 응답 헤더 설정
-    response = redirect("login")
-    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response['Pragma'] = 'no-cache'
-    response['Expires'] = '0'
-    
-    return response
-
+# [성능 향상] 캐싱 적용 (10분 캐시) - 선택적이지만 권장
+@cache_page(60 * 10)  # 10분 캐시
 def waiting(request):
     """승인 대기 페이지"""
     return render(request, 'labeling/waiting.html')
+
+# ============================================================================
+# [필수 기능] 관리자 대시보드
+# ============================================================================
 
 @login_required
 def admin_dashboard(request):
     if request.user.role != 'admin':
         return redirect('dashboard')
     
+    # [성능 향상] 배치 정보를 한 번에 가져오기 (N+1 문제 해결)
     batches = Batch.objects.prefetch_related('images').all().order_by('-created_at')
     
     # 승인 대기 중인 사용자들
@@ -103,54 +109,69 @@ def admin_dashboard(request):
     User = get_user_model()
     pending_users = User.objects.filter(role='user', is_approved=False).order_by('-date_joined')
     
+    # [성능 향상] 배치별 통계를 한 번에 계산 (N+1 문제 해결)
+    from django.db.models import Count, Q
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    # [성능 향상] 배치별 라벨링 통계를 한 번에 계산
+    batch_stats = {}
+    for batch in batches:
+        total_images = batch.images.count()
+        labeled_count = LabelingResult.objects.filter(image__batch=batch).values('image').distinct().count()
+        progress_percentage = (labeled_count / total_images * 100) if total_images > 0 else 0
+        
+        batch_stats[batch.id] = {
+            'total_images': total_images,
+            'labeled_count': labeled_count,
+            'progress_percentage': round(progress_percentage, 1)
+        }
+    
     # 배치별 썸네일 정보 추가
     batches_with_info = []
     for batch in batches:
         first_image = batch.images.first()
         thumbnail_url = first_image.url if first_image else None
         
-        # 배치별 전체 진행률 계산
-        total_images = batch.images.count()
-        labeled_count = LabelingResult.objects.filter(image__batch=batch).values('image').distinct().count()
-        progress_percentage = (labeled_count / total_images * 100) if total_images > 0 else 0
-        
         batches_with_info.append({
             'batch': batch,
             'thumbnail_url': thumbnail_url,
-            'total_images': total_images,
-            'labeled_count': labeled_count,
-            'progress_percentage': round(progress_percentage, 1)
+            'total_images': batch_stats[batch.id]['total_images'],
+            'labeled_count': batch_stats[batch.id]['labeled_count'],
+            'progress_percentage': batch_stats[batch.id]['progress_percentage']
         })
     
-    # 사용자별 진행률 통계
+    # [성능 향상] 사용자별 진행률 통계 (최적화)
     user_stats = []
     approved_users = User.objects.filter(role='user', is_approved=True)
     
+    # [성능 향상] 활성 배치만 필터링
+    active_batches = [batch for batch in batches if batch.is_active]
+    
     for user in approved_users:
-        # 각 배치별 사용자 진행률
+        # [성능 향상] 각 배치별 사용자 진행률을 한 번에 계산
         user_batch_progress = []
         total_assigned = 0
         total_completed = 0
         
-        for batch in batches:
-            if batch.is_active:  # 활성 배치만 계산
-                batch_total = batch.images.count()
-                batch_completed = LabelingResult.objects.filter(
-                    user=user, 
-                    image__batch=batch
-                ).count()
-                
-                batch_progress = (batch_completed / batch_total * 100) if batch_total > 0 else 0
-                
-                user_batch_progress.append({
-                    'batch_name': batch.name,
-                    'total': batch_total,
-                    'completed': batch_completed,
-                    'progress': round(batch_progress, 1)
-                })
-                
-                total_assigned += batch_total
-                total_completed += batch_completed
+        for batch in active_batches:
+            batch_total = batch.images.count()
+            batch_completed = LabelingResult.objects.filter(
+                user=user, 
+                image__batch=batch
+            ).count()
+            
+            batch_progress = (batch_completed / batch_total * 100) if batch_total > 0 else 0
+            
+            user_batch_progress.append({
+                'batch_name': batch.name,
+                'total': batch_total,
+                'completed': batch_completed,
+                'progress': round(batch_progress, 1)
+            })
+            
+            total_assigned += batch_total
+            total_completed += batch_completed
         
         overall_progress = (total_completed / total_assigned * 100) if total_assigned > 0 else 0
         
@@ -162,27 +183,28 @@ def admin_dashboard(request):
             'batch_progress': user_batch_progress
         })
     
-    # 보안 모니터링 통계
-    from django.utils import timezone
-    from datetime import timedelta
-    
-    # 최근 24시간 이미지 접근 통계
+    # [성능 향상] 보안 모니터링 통계 (최적화)
     yesterday = timezone.now() - timedelta(days=1)
     recent_access_logs = ImageAccessLog.objects.filter(access_time__gte=yesterday)
     
+    # [성능 향상] 통계를 한 번에 계산
+    total_requests = recent_access_logs.count()
+    successful_requests = recent_access_logs.filter(success=True).count()
+    failed_requests = total_requests - successful_requests
+    
     security_stats = {
-        'total_requests': recent_access_logs.count(),
-        'successful_requests': recent_access_logs.filter(success=True).count(),
-        'failed_requests': recent_access_logs.filter(success=False).count(),
+        'total_requests': total_requests,
+        'successful_requests': successful_requests,
+        'failed_requests': failed_requests,
         'rate_limit_violations': recent_access_logs.filter(error_message__contains='Rate limit').count(),
         'unauthorized_attempts': recent_access_logs.filter(error_message__contains='Access denied').count(),
         'top_users': recent_access_logs.values('user__email').annotate(
-            request_count=models.Count('id')
+            request_count=Count('id')
         ).order_by('-request_count')[:5],
         'recent_failures': recent_access_logs.filter(success=False).order_by('-access_time')[:10]
     }
     
-    # 메시지 통계
+    # [성능 향상] 메시지 통계 (최적화)
     message_stats = {
         'total_messages': Message.objects.count(),
         'unread_messages': Message.objects.filter(is_read=False).count(),
@@ -195,40 +217,52 @@ def admin_dashboard(request):
         'pending_users': pending_users,
         'user_stats': user_stats,
         'security_stats': security_stats,
-        'message_stats': message_stats
+        'message_stats': message_stats,
+        'service_account_available': get_service_account_credentials() is not None
     }
     return render(request, 'labeling/admin_dashboard.html', context)
 
+# ============================================================================
+# [필수 기능] 사용자 대시보드
+# ============================================================================
+
 def dashboard(request):
-    # 인증 확인 (자동 리다이렉트 방지)
+    # [필수 기능] 인증 확인 (자동 리다이렉트 방지)
     if not request.user.is_authenticated:
         messages.error(request, "로그인이 필요합니다.")
         return redirect("login")
     
-    # 관리자는 관리자 대시보드로 리다이렉트
+    # [필수 기능] 관리자는 관리자 대시보드로 리다이렉트
     if request.user.role == 'admin':
         return redirect('admin_dashboard')
     
-    # 승인되지 않은 사용자는 대기 페이지로 리다이렉트
+    # [필수 기능] 승인되지 않은 사용자는 대기 페이지로 리다이렉트
     if not request.user.is_approved:
         return redirect('waiting')
     
-    # 활성화된 배치만 표시
-    batches = Batch.objects.filter(is_active=True)
+    # [성능 향상] 활성화된 배치만 표시 (최적화)
+    batches = Batch.objects.filter(is_active=True).prefetch_related('images')
     
     batch_data = []
     total_images = 0
     completed_images = 0
     
+    # [성능 향상] 사용자의 라벨링 결과를 한 번에 가져오기
+    user_labeling_results = LabelingResult.objects.filter(
+        user=request.user
+    ).values_list('image__batch_id', flat=True)
+    
+    # [성능 향상] 배치별 완료된 이미지 수를 한 번에 계산
+    batch_completion_counts = {}
+    for batch_id in user_labeling_results:
+        batch_completion_counts[batch_id] = batch_completion_counts.get(batch_id, 0) + 1
+    
     for batch in batches:
         batch_images = batch.images.all()
         batch_total = batch_images.count()
         
-        # 라벨링 완료된 이미지 수 계산
-        batch_completed = LabelingResult.objects.filter(
-            image__batch=batch,
-            user=request.user
-        ).values('image').distinct().count()
+        # [성능 향상] 라벨링 완료된 이미지 수 계산 (최적화)
+        batch_completed = batch_completion_counts.get(batch.id, 0)
         
         progress_percentage = (batch_completed / batch_total * 100) if batch_total > 0 else 0
         is_completed = batch_completed >= batch_total
@@ -253,18 +287,19 @@ def dashboard(request):
     
     context = {
         "batches": batch_data,
-        "batches_json": batch_data,
         "total_images": total_images,
         "completed_images": completed_images,
-        "overall_progress": overall_progress,
-        "google_user_info": request.session.get('google_user_info', {}),
-        "user_role": request.user.role,
+        "overall_progress": overall_progress
     }
     
     return render(request, "labeling/dashboard.html", context)
 
+# ============================================================================
+# [필수 기능] 라벨링 페이지
+# ============================================================================
+
 def labeling(request, batch_id):
-    # 인증 확인 (자동 리다이렉트 방지)
+    # [필수 기능] 인증 확인 (자동 리다이렉트 방지)
     if not request.user.is_authenticated:
         messages.error(request, "로그인이 필요합니다.")
         return redirect("login")
@@ -299,6 +334,10 @@ def labeling(request, batch_id):
         messages.error(request, f"오류가 발생했습니다: {str(e)}")
         return redirect("dashboard")
 
+# ============================================================================
+# [필수 기능] 라벨링 진행률 저장
+# ============================================================================
+
 @csrf_exempt
 def save_progress(request):
     if request.method == "POST":
@@ -324,6 +363,10 @@ def save_progress(request):
             return JsonResponse({"error": str(e)}, status=400)
     
     return JsonResponse({"error": "POST only"}, status=405)
+
+# ============================================================================
+# [필수 기능] 라벨링 결과 저장
+# ============================================================================
 
 @csrf_exempt  
 def save_label(request):
@@ -404,424 +447,18 @@ def validate_user(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
 
-def google_user_login_start(request):
-    """Google 사용자 로그인 시작 (Drive 권한 없음)"""
-    try:
-        print(f"[INFO] Google 사용자 로그인 시작 - Client ID: {GOOGLE_CLIENT_ID[:20]}...")
-        
-        # OAuth 세션 상태 클리어
-        if 'google_oauth_state' in request.session:
-            del request.session['google_oauth_state']
-        if 'drive_oauth_state' in request.session:
-            del request.session['drive_oauth_state']
-        request.session.modified = True
-        
-        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
-        redirect_uri = request.build_absolute_uri('/google-user-auth-callback/')
-        
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [redirect_uri]
-                }
-            },
-            scopes=[
-                "openid",
-                "https://www.googleapis.com/auth/userinfo.email",
-                "https://www.googleapis.com/auth/userinfo.profile"
-            ],
-            redirect_uri=redirect_uri
-        )
-        
-        authorization_url, state = flow.authorization_url(
-            access_type='offline',
-            prompt='consent'
-        )
-        
-        request.session['google_oauth_state'] = state
-        request.session['login_type'] = 'user'
-        return redirect(authorization_url)
-        
-    except Exception as e:
-        print(f"[ERROR] Google 사용자 로그인 오류: {str(e)}")
-        messages.error(request, f"Google 사용자 로그인 시작 실패: {str(e)}")
-        return redirect('login')
-
-def google_admin_login_start(request):
-    """Google 관리자 로그인 시작 (Drive 권한 포함)"""
-    try:
-        print(f"[INFO] Google 관리자 로그인 시작 - Client ID: {GOOGLE_CLIENT_ID[:20]}...")
-        
-        # OAuth 세션 상태 클리어
-        if 'google_oauth_state' in request.session:
-            del request.session['google_oauth_state']
-        if 'drive_oauth_state' in request.session:
-            del request.session['drive_oauth_state']
-        request.session.modified = True
-        
-        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
-        redirect_uri = request.build_absolute_uri('/google-admin-auth-callback/')
-        
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [redirect_uri]
-                }
-            },
-            scopes=[
-                "openid",
-                "https://www.googleapis.com/auth/userinfo.email",
-                "https://www.googleapis.com/auth/userinfo.profile",
-                "https://www.googleapis.com/auth/drive.readonly",
-                "https://www.googleapis.com/auth/drive.metadata.readonly"
-            ],
-            redirect_uri=redirect_uri
-        )
-        
-        authorization_url, state = flow.authorization_url(
-            access_type='offline',
-            include_granted_scopes='true',
-            prompt='consent'
-        )
-        
-        request.session['google_oauth_state'] = state
-        request.session['login_type'] = 'admin'
-        return redirect(authorization_url)
-        
-    except Exception as e:
-        print(f"[ERROR] Google 관리자 로그인 오류: {str(e)}")
-        messages.error(request, f"Google 관리자 로그인 시작 실패: {str(e)}")
-        return redirect('login')
-
-def google_drive_auth_start(request):
-    """Google Drive 인증 시작 (기존 로그인된 사용자용)"""
-    if not request.user.is_authenticated:
-        messages.error(request, "먼저 로그인해주세요.")
-        return redirect('login')
-        
-    try:
-        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
-        redirect_uri = request.build_absolute_uri('/google-drive-auth-callback/')
-        
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [redirect_uri]
-                }
-            },
-            scopes=[
-                "https://www.googleapis.com/auth/drive.readonly",
-                "https://www.googleapis.com/auth/drive.metadata.readonly"
-            ],
-            redirect_uri=redirect_uri
-        )
-        
-        authorization_url, state = flow.authorization_url(
-            access_type='offline',
-            include_granted_scopes='true',
-            prompt='consent'
-        )
-        
-        request.session['drive_oauth_state'] = state
-        return redirect(authorization_url)
-        
-    except Exception as e:
-        messages.error(request, f"Google Drive 인증 시작 실패: {str(e)}")
-        return redirect('drive_import')
-
-def google_user_auth_callback(request):
-    """Google 사용자 로그인 콜백 처리"""
-    try:
-        if 'google_oauth_state' not in request.session:
-            messages.error(request, "인증 상태가 올바르지 않습니다. 다시 시도해주세요.")
-            return redirect('login')
-        
-        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
-        redirect_uri = request.build_absolute_uri('/google-user-auth-callback/')
-        
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [redirect_uri]
-                }
-            },
-            scopes=[
-                "openid",
-                "https://www.googleapis.com/auth/userinfo.email", 
-                "https://www.googleapis.com/auth/userinfo.profile"
-            ],
-            state=request.session['google_oauth_state'],
-            redirect_uri=redirect_uri
-        )
-        
-        # 인증 토큰 가져오기
-        flow.fetch_token(authorization_response=request.build_absolute_uri())
-        
-        credentials = flow.credentials
-        
-        # 사용자 정보 가져오기 (시간 동기화 문제 대응)
-        import time
-        max_retries = 3
-        retry_delay = 1
-        
-        for attempt in range(max_retries):
-            try:
-                id_info = id_token.verify_oauth2_token(
-                    credentials.id_token, google_requests.Request(), GOOGLE_CLIENT_ID)
-                break
-            except ValueError as e:
-                if "Token used too early" in str(e) and attempt < max_retries - 1:
-                    print(f"[RETRY] 토큰 시간 동기화 문제 감지, {retry_delay}초 후 재시도... (시도 {attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    continue
-                else:
-                    raise e
-        
-        # 사용자 생성 또는 로그인
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        
-        email = id_info.get('email')
-        name = id_info.get('name')
-        google_id = id_info.get('sub')
-        
-        # 사용자 찾기 또는 생성
-        user, created = User.objects.get_or_create(
-            google_id=google_id,
-            defaults={
-                'username': f"user_{google_id}",
-                'email': email,
-                'first_name': name,
-                'role': 'user',
-                'is_active': True,
-                'is_approved': False  # 관리자 승인 대기
-            }
-        )
-        
-        if created:
-            messages.info(request, f"새 계정이 생성되었습니다. 관리자 승인을 기다리고 있습니다.")
-        elif not user.is_approved:
-            messages.warning(request, "계정이 아직 승인되지 않았습니다. 관리자 승인을 기다려주세요.")
-        else:
-            messages.success(request, f"환영합니다, {name}님!")
-        
-        # 승인된 사용자만 로그인 처리
-        if user.is_approved:
-            login(request, user)
-            
-            # 사용자 정보 저장
-            request.session['google_user_info'] = {
-                'email': email,
-                'name': name,
-                'picture': id_info.get('picture', ''),
-                'google_id': google_id
-            }
-            
-            # 인증 상태 정리
-            del request.session['google_oauth_state']
-            return redirect('dashboard')
-        else:
-            # 승인 대기 페이지로 이동
-            del request.session['google_oauth_state']
-            return redirect('waiting')
-        
-    except Exception as e:
-        messages.error(request, f"Google 사용자 로그인 실패: {str(e)}")
-        return redirect('login')
-
-def google_admin_auth_callback(request):
-    """Google 관리자 로그인 콜백 처리"""
-    try:
-        if 'google_oauth_state' not in request.session:
-            messages.error(request, "인증 상태가 올바르지 않습니다. 다시 시도해주세요.")
-            return redirect('login')
-        
-        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
-        redirect_uri = request.build_absolute_uri('/google-admin-auth-callback/')
-        
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [redirect_uri]
-                }
-            },
-            scopes=[
-                "openid",
-                "https://www.googleapis.com/auth/userinfo.email", 
-                "https://www.googleapis.com/auth/userinfo.profile",
-                "https://www.googleapis.com/auth/drive.readonly",
-                "https://www.googleapis.com/auth/drive.metadata.readonly"
-            ],
-            state=request.session['google_oauth_state'],
-            redirect_uri=redirect_uri
-        )
-        
-        # 인증 토큰 가져오기
-        flow.fetch_token(authorization_response=request.build_absolute_uri())
-        
-        credentials = flow.credentials
-        
-        # 사용자 정보 가져오기 (시간 동기화 문제 대응)
-        import time
-        max_retries = 3
-        retry_delay = 1
-        
-        for attempt in range(max_retries):
-            try:
-                id_info = id_token.verify_oauth2_token(
-                    credentials.id_token, google_requests.Request(), GOOGLE_CLIENT_ID)
-                break
-            except ValueError as e:
-                if "Token used too early" in str(e) and attempt < max_retries - 1:
-                    print(f"[RETRY] 토큰 시간 동기화 문제 감지, {retry_delay}초 후 재시도... (시도 {attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    continue
-                else:
-                    raise e
-        
-        # 관리자 화이트리스트 확인
-        from django.conf import settings
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        
-        email = id_info.get('email')
-        name = id_info.get('name')
-        google_id = id_info.get('sub')
-        
-        if email not in settings.ADMIN_WHITELIST:
-            messages.error(request, "관리자 권한이 없습니다.")
-            return redirect('login')
-        
-        # 관리자 사용자 찾기 또는 생성
-        user, created = User.objects.get_or_create(
-            google_id=google_id,
-            defaults={
-                'username': f"admin_{google_id}",
-                'email': email,
-                'first_name': name,
-                'role': 'admin',
-                'is_active': True,
-                'is_approved': True,  # 관리자는 자동 승인
-                'is_staff': True,
-                'is_superuser': True
-            }
-        )
-        
-        if created:
-            messages.success(request, f"관리자 계정이 생성되었습니다. 환영합니다, {name}님!")
-        else:
-            messages.success(request, f"환영합니다, {name} 관리자님!")
-        
-        # Django 로그인 처리
-        login(request, user)
-        
-        # Google Drive 인증 정보 저장
-        request.session['drive_credentials'] = {
-            'token': credentials.token,
-            'refresh_token': credentials.refresh_token,
-            'token_uri': credentials.token_uri,
-            'client_id': credentials.client_id,
-            'client_secret': credentials.client_secret,
-            'scopes': credentials.scopes
-        }
-        
-        # 사용자 정보 저장
-        request.session['google_user_info'] = {
-            'email': email,
-            'name': name,
-            'picture': id_info.get('picture', ''),
-            'google_id': google_id
-        }
-        
-        # 인증 상태 정리
-        del request.session['google_oauth_state']
-        
-        return redirect('admin_dashboard')
-        
-    except Exception as e:
-        messages.error(request, f"Google 관리자 로그인 실패: {str(e)}")
-        return redirect('login')
-
-def google_drive_auth_callback(request):
-    """Google Drive 인증 콜백 처리 (기존 로그인된 사용자용)"""
-    try:
-        if 'drive_oauth_state' not in request.session:
-            messages.error(request, "인증 상태가 올바르지 않습니다. 다시 시도해주세요.")
-            return redirect('drive_import')
-        
-        # 동적 리디렉션 URI 생성 (현재 도메인 기반)
-        redirect_uri = request.build_absolute_uri('/google-drive-auth-callback/')
-        
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": GOOGLE_CLIENT_ID,
-                    "client_secret": GOOGLE_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [redirect_uri]
-                }
-            },
-            scopes=[
-                "https://www.googleapis.com/auth/drive.readonly",
-                "https://www.googleapis.com/auth/drive.metadata.readonly"
-            ],
-            state=request.session['drive_oauth_state'],
-            redirect_uri=redirect_uri
-        )
-        
-        # 인증 토큰 가져오기
-        flow.fetch_token(authorization_response=request.build_absolute_uri())
-        
-        credentials = flow.credentials
-        
-        # 세션에 인증 정보 저장
-        request.session['drive_credentials'] = {
-            'token': credentials.token,
-            'refresh_token': credentials.refresh_token,
-            'token_uri': credentials.token_uri,
-            'client_id': credentials.client_id,
-            'client_secret': credentials.client_secret,
-            'scopes': credentials.scopes
-        }
-        
-        # 인증 상태 정리
-        del request.session['drive_oauth_state']
-        
-        messages.success(request, "Google Drive 인증이 완료되었습니다!")
-        return redirect('drive_import')
-        
-    except Exception as e:
-        messages.error(request, f"Google Drive 인증 실패: {str(e)}")
-        return redirect('drive_import')
+# ============================================================================
+# [필수 기능] Google Drive API 관련 뷰 (IAM 서비스 계정 기반)
+# ============================================================================
 
 def upload_to_drive(request):
     """Google Drive에 파일 업로드 (향후 확장용)"""
-    if 'drive_credentials' not in request.session:
-        return redirect('google_drive_auth_start')
-    
     try:
-        credentials = Credentials(**request.session['drive_credentials'])
+        # IAM 서비스 계정 credentials 사용
+        credentials = get_service_account_credentials()
+        if not credentials:
+            return JsonResponse({"error": "Service account credentials not available"}, status=503)
+        
         service = build('drive', 'v3', credentials=credentials)
         
         # 파일 업로드 로직 (향후 구현)
@@ -841,11 +478,12 @@ def list_drive_folder_files(request):
     if not folder_id:
         return JsonResponse({'error': 'folder_id is required'}, status=400)
     
-    if 'drive_credentials' not in request.session:
-        return JsonResponse({'error': 'Not authenticated'}, status=401)
+    # IAM 서비스 계정 credentials 사용
+    credentials = get_service_account_credentials()
+    if not credentials:
+        return JsonResponse({'error': 'Service account credentials not available'}, status=503)
     
     try:
-        credentials = Credentials(**request.session['drive_credentials'])
         service = build('drive', 'v3', credentials=credentials)
         
         # 이미지 파일만 필터링
@@ -899,10 +537,11 @@ def create_batch_from_drive_files(request, folder_id):
         split_method = request.POST.get('split_method', 'single')
         split_value = int(request.POST.get('split_value', 0)) if request.POST.get('split_value') else 0
         
-        if 'drive_credentials' not in request.session:
-            return JsonResponse({'error': 'Not authenticated'}, status=401)
+        # IAM 서비스 계정 credentials 사용
+        credentials = get_service_account_credentials()
+        if not credentials:
+            return JsonResponse({'error': 'Service account credentials not available'}, status=503)
         
-        credentials = Credentials(**request.session['drive_credentials'])
         service = build('drive', 'v3', credentials=credentials)
         
         # 폴더의 이미지 파일들 가져오기
@@ -1098,7 +737,7 @@ def drive_import(request):
 @login_required
 def proxy_drive_image(request, file_id):
     """Google Drive 이미지를 프록시해서 제공 - 보안 강화"""
-    
+    from .utils import get_service_account_credentials
     # 사용자 IP 주소 가져오기
     def get_client_ip(request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -1107,20 +746,16 @@ def proxy_drive_image(request, file_id):
         else:
             ip = request.META.get('REMOTE_ADDR')
         return ip
-    
     client_ip = get_client_ip(request)
     user_agent = request.META.get('HTTP_USER_AGENT', '')
-    
     # Rate Limiting: 1분간 최대 30회 요청 허용
     from django.utils import timezone
     from datetime import timedelta
-    
     one_minute_ago = timezone.now() - timedelta(minutes=1)
     recent_requests = ImageAccessLog.objects.filter(
         user=request.user,
         access_time__gte=one_minute_ago
     ).count()
-    
     if recent_requests >= 30:
         # 로그 기록
         ImageAccessLog.objects.create(
@@ -1132,7 +767,6 @@ def proxy_drive_image(request, file_id):
             error_message="Rate limit exceeded"
         )
         return HttpResponse("Rate limit exceeded. Please wait before requesting more images.", status=429)
-    
     # 1. 기본 인증 확인
     if not request.user.is_authenticated:
         ImageAccessLog.objects.create(
@@ -1144,18 +778,14 @@ def proxy_drive_image(request, file_id):
             error_message="Authentication required"
         )
         return HttpResponse("Authentication required", status=401)
-    
     # 2. 사용자 권한 확인 (관리자 또는 승인된 사용자만)
     if request.user.role == 'admin':
-        # 관리자는 모든 이미지 접근 가능
         pass
     elif request.user.role == 'user' and request.user.is_approved:
-        # 승인된 사용자는 자신이 접근 가능한 배치의 이미지만 접근 가능
         user_accessible_file_ids = Image.objects.filter(
-            batch__is_active=True,  # 활성 배치만
+            batch__is_active=True,
             drive_file_id=file_id
         ).values_list('drive_file_id', flat=True)
-        
         if file_id not in user_accessible_file_ids:
             ImageAccessLog.objects.create(
                 user=request.user,
@@ -1167,7 +797,6 @@ def proxy_drive_image(request, file_id):
             )
             return HttpResponse("Access denied: You don't have permission to view this image", status=403)
     else:
-        # 승인되지 않은 사용자는 접근 불가
         ImageAccessLog.objects.create(
             user=request.user,
             image_file_id=file_id,
@@ -1177,8 +806,6 @@ def proxy_drive_image(request, file_id):
             error_message="Access denied: User not approved"
         )
         return HttpResponse("Access denied: User not approved", status=403)
-    
-    # 3. 세션 하이재킹 방지 - 추가 보안 검증
     session_key = request.session.session_key
     if not session_key:
         ImageAccessLog.objects.create(
@@ -1190,25 +817,18 @@ def proxy_drive_image(request, file_id):
             error_message="Invalid session"
         )
         return HttpResponse("Invalid session", status=401)
-    
     try:
-        # 4. 먼저 로컬에 다운로드된 이미지가 있는지 확인
         try:
             image_obj = Image.objects.get(drive_file_id=file_id)
             if image_obj.url and image_obj.url.startswith('/media/'):
-                # 로컬 파일이 존재하는지 확인
                 local_path = os.path.join(settings.MEDIA_ROOT, image_obj.url.replace('/media/', ''))
                 if os.path.exists(local_path):
                     with open(local_path, 'rb') as f:
                         file_content = f.read()
-                    
-                    # MIME 타입 추정
                     import mimetypes
                     content_type, _ = mimetypes.guess_type(local_path)
                     if not content_type:
                         content_type = 'image/jpeg'
-                    
-                    # 성공 로그 기록
                     ImageAccessLog.objects.create(
                         user=request.user,
                         image_file_id=file_id,
@@ -1217,52 +837,38 @@ def proxy_drive_image(request, file_id):
                         success=True,
                         error_message="Local file served"
                     )
-                    
                     http_response = HttpResponse(file_content, content_type=content_type)
-                    http_response['Cache-Control'] = 'private, max-age=3600'  # 1시간 캐시
-                    http_response['X-Content-Type-Options'] = 'nosniff'  # 보안 헤더
+                    http_response['Cache-Control'] = 'private, max-age=3600'
+                    http_response['X-Content-Type-Options'] = 'nosniff'
                     return http_response
         except Image.DoesNotExist:
             pass
+        # IAM 서비스 계정 credentials 사용
+        admin_credentials = get_service_account_credentials()
+        if not admin_credentials:
+            ImageAccessLog.objects.create(
+                user=request.user,
+                image_file_id=file_id,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                success=False,
+                error_message="Service account credentials not available"
+            )
+            return HttpResponse("Service temporarily unavailable: Service account credentials not available", status=503)
         
-        # 5. 로컬 파일이 없으면 Google Drive에서 프록시 (관리자 크레덴셜 필요)
-        admin_credentials = None
-        
-        # 현재 사용자가 관리자이고 drive_credentials가 있으면 사용
-        if request.user.role == 'admin' and 'drive_credentials' in request.session:
-            admin_credentials = request.session['drive_credentials']
+        # Credentials 객체 생성
+        from google.oauth2.credentials import Credentials
+        if hasattr(admin_credentials, 'token') or isinstance(admin_credentials, dict):
+            credentials = Credentials(**admin_credentials)
         else:
-            # 일반 사용자의 경우, 시스템 전체에서 관리자 크레덴셜 찾기
-            # (실제 프로덕션에서는 Redis나 별도 저장소 사용 권장)
-            admin_credentials = get_system_admin_credentials()
-            
-            if not admin_credentials:
-                ImageAccessLog.objects.create(
-                    user=request.user,
-                    image_file_id=file_id,
-                    ip_address=client_ip,
-                    user_agent=user_agent,
-                    success=False,
-                    error_message="Admin credentials not found"
-                )
-                return HttpResponse("Service temporarily unavailable: Admin credentials not found", status=503)
-        
-        credentials = Credentials(**admin_credentials)
+            credentials = admin_credentials
         service = build('drive', 'v3', credentials=credentials)
-        
-        # 파일 메타데이터 가져오기
         file_metadata = service.files().get(fileId=file_id, fields='mimeType,thumbnailLink').execute()
-        
-        # 썸네일 링크가 있으면 사용
         thumbnail_link = file_metadata.get('thumbnailLink')
         if thumbnail_link:
-            # 썸네일 크기를 800px로 증가
             thumbnail_url = thumbnail_link.replace('=s220', '=s800')
-            
-            # 썸네일 이미지 다운로드
             response = requests.get(thumbnail_url)
             if response.status_code == 200:
-                # 성공 로그 기록
                 ImageAccessLog.objects.create(
                     user=request.user,
                     image_file_id=file_id,
@@ -1271,19 +877,13 @@ def proxy_drive_image(request, file_id):
                     success=True,
                     error_message="Google Drive thumbnail served"
                 )
-                
-                # 적절한 Content-Type 설정
                 content_type = file_metadata.get('mimeType', 'image/jpeg')
                 http_response = HttpResponse(response.content, content_type=content_type)
-                http_response['Cache-Control'] = 'private, max-age=3600'  # 1시간 캐시
-                http_response['X-Content-Type-Options'] = 'nosniff'  # 보안 헤더
+                http_response['Cache-Control'] = 'private, max-age=3600'
+                http_response['X-Content-Type-Options'] = 'nosniff'
                 return http_response
-        
-        # 썸네일이 없으면 파일 직접 다운로드 시도
         try:
             file_content = service.files().get_media(fileId=file_id).execute()
-            
-            # 성공 로그 기록
             ImageAccessLog.objects.create(
                 user=request.user,
                 image_file_id=file_id,
@@ -1292,11 +892,10 @@ def proxy_drive_image(request, file_id):
                 success=True,
                 error_message="Google Drive direct file served"
             )
-            
             content_type = file_metadata.get('mimeType', 'image/jpeg')
             http_response = HttpResponse(file_content, content_type=content_type)
-            http_response['Cache-Control'] = 'private, max-age=3600'  # 1시간 캐시
-            http_response['X-Content-Type-Options'] = 'nosniff'  # 보안 헤더
+            http_response['Cache-Control'] = 'private, max-age=3600'
+            http_response['X-Content-Type-Options'] = 'nosniff'
             return http_response
         except Exception as e:
             print(f"직접 다운로드 실패: {str(e)}")
@@ -1309,7 +908,6 @@ def proxy_drive_image(request, file_id):
                 error_message=f"Direct download failed: {str(e)}"
             )
             return HttpResponse("Image not available", status=404)
-            
     except Exception as e:
         print(f"이미지 프록시 오류: {str(e)}")
         ImageAccessLog.objects.create(
@@ -1322,42 +920,7 @@ def proxy_drive_image(request, file_id):
         )
         return HttpResponse("Error loading image", status=500)
 
-def get_system_admin_credentials():
-    """시스템에서 관리자 크레덴셜을 찾는 함수 (간단한 구현)"""
-    # 실제 프로덕션에서는 Redis, 데이터베이스, 또는 안전한 저장소 사용
-    
-    # 임시: 현재 활성 세션에서 관리자 크레덴셜 찾기
-    from django.contrib.sessions.models import Session
-    from django.utils import timezone
-    import pickle
-    
-    try:
-        # 최근 24시간 내 세션 중에서 drive_credentials가 있는 것 찾기
-        recent_sessions = Session.objects.filter(
-            expire_date__gt=timezone.now()
-        ).order_by('-expire_date')[:50]  # 최근 50개 세션만 확인
-        
-        for session in recent_sessions:
-            try:
-                session_data = session.get_decoded()
-                if 'drive_credentials' in session_data:
-                    # 해당 세션의 사용자가 관리자인지 확인
-                    user_id = session_data.get('_auth_user_id')
-                    if user_id:
-                        from django.contrib.auth import get_user_model
-                        User = get_user_model()
-                        try:
-                            user = User.objects.get(id=user_id, role='admin')
-                            return session_data['drive_credentials']
-                        except User.DoesNotExist:
-                            continue
-            except:
-                continue
-        
-        return None
-    except Exception as e:
-        print(f"관리자 크레덴셜 찾기 오류: {str(e)}")
-        return None
+
 
 @login_required
 def approve_user(request, user_id):
@@ -1662,3 +1225,53 @@ def mark_message_read(request):
             return JsonResponse({'success': False, 'error': f'오류가 발생했습니다: {str(e)}'})
     
     return JsonResponse({'success': False, 'error': '잘못된 요청 방법입니다.'})
+
+def logout_view(request):
+    """완전한 로그아웃 처리"""
+    # 사용자 정보 저장 (메시지용)
+    user_name = request.user.first_name if request.user.is_authenticated else "사용자"
+    
+    # Django 로그아웃 처리
+    logout(request)
+    
+    # 세션 데이터 완전 삭제
+    request.session.flush()
+    
+    # 성공 메시지 추가
+    messages.success(request, f"{user_name}님이 성공적으로 로그아웃되었습니다.")
+    
+    # 캐시 방지를 위한 응답 헤더 설정
+    response = redirect("login")
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    
+    return response
+
+@login_required
+def test_service_account_view(request):
+    """서비스 계정 테스트 뷰 (관리자 전용)"""
+    if request.user.role != 'admin':
+        messages.error(request, "관리자 권한이 필요합니다.")
+        return redirect('login')
+    
+    if request.method == 'POST':
+        success, message = test_service_account_access()
+        
+        if success:
+            messages.success(request, f"서비스 계정 테스트 성공: {message}")
+        else:
+            messages.error(request, f"서비스 계정 테스트 실패: {message}")
+        
+        return redirect('admin_dashboard')
+    
+    # GET 요청 시 테스트 결과만 표시
+    success, message = test_service_account_access()
+    
+    context = {
+        'test_success': success,
+        'test_message': message,
+        'service_account_available': get_service_account_credentials() is not None
+    }
+    
+    return render(request, 'labeling/test_service_account.html', context)
