@@ -161,4 +161,31 @@
     border: 1px solid #ff9800;
 }
 </style>
+
+<script>
+// CSRF 토큰 확인 및 디버깅
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
+    if (!csrfToken) {
+        console.error('CSRF token not found in form');
+        alert('CSRF 토큰이 없습니다. 페이지를 새로고침해주세요.');
+    } else {
+        console.log('CSRF token found:', csrfToken.value);
+    }
+    
+    // 폼 제출 시 CSRF 토큰 재확인
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const token = this.querySelector('[name=csrfmiddlewaretoken]');
+            if (!token || !token.value) {
+                e.preventDefault();
+                alert('CSRF 토큰이 없습니다. 페이지를 새로고침해주세요.');
+                return false;
+            }
+            console.log('Form submitting with CSRF token:', token.value);
+        });
+    }
+});
+    
 {% endblock %} 
