@@ -59,7 +59,6 @@ DATABASES = {
     )
 }
 
-
 # 필수: 정적 파일 설정 (프로덕션)
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
