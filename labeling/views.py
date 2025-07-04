@@ -98,19 +98,22 @@ def login_view(request):
                     login(request, user)
                     logger.info(f"Successful login for user: {username} from IP: {request.META.get('REMOTE_ADDR')}")
                     # 역할별 리다이렉트 처리
-                    if login_type == "admin" and user.role == 'admin':
+                    if user.role == 'admin':
+                        # 관리자는 항상 관리자 대시보드로 리다이렉트
                         messages.success(request, f"{user.username}님, 관리자 대시보드에 오신 것을 환영합니다!")
                         return redirect("admin_dashboard")
-                    elif login_type == "user" and user.role == 'user':
+                    elif user.role == 'user':
+                        # 일반 사용자는 승인 상태에 따라 리다이렉트
                         if user.is_approved:
                             messages.success(request, f"{user.username}님, 환영합니다!")
                             return redirect("dashboard")
                         else:
-                            logger.warning(f"Login attempt for inactive user: {username}")
-                            messages.error(request, "비활성화된 계정입니다. 관리자에게 문의하세요.")
+                            logger.warning(f"Login attempt for unapproved user: {username}")
+                            messages.error(request, "승인 대기 중인 계정입니다. 관리자 승인을 기다려주세요.")
+                            return redirect("waiting")
                     else:
-                        logger.warning(f"Role mismatch for user {username}: requested {login_type}, actual role {user.role}")
-                        messages.error(request, f"'{login_type}' 권한이 없습니다. 올바른 계정 유형을 선택해주세요.")
+                        logger.warning(f"Unknown role for user {username}: {user.role}")
+                        messages.error(request, "알 수 없는 사용자 역할입니다. 관리자에게 문의하세요.")
                 else:
                     logger.warning(f"Login attempt for inactive user: {username}")
                     messages.error(request, "비활성화된 계정입니다. 관리자에게 문의하세요.")
