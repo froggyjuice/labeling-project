@@ -5,7 +5,7 @@
         <!-- 로그인 화면 -->
         <div class="login-screen">
             <h1>이미지 라벨링 시스템</h1>
-            <p>모드를 선택하고 로그인하세요</p>
+            <p>계정 정보로 로그인하세요</p>
             
             <!-- Django 내부 로그인 폼 -->
             <div style="text-align: center; margin: 30px 0;">
@@ -14,14 +14,8 @@
                     <div style="margin-bottom: 15px;">
                         <input type="text" name="username" placeholder="사용자명" required class="user-code-input">
                     </div>
-                    <div style="margin-bottom: 15px;">
-                        <input type="password" name="password" placeholder="비밀번호" required class="user-code-input">
-                    </div>
                     <div style="margin-bottom: 20px;">
-                        <select name="login_type" class="user-code-input" style="background: white;">
-                            <option value="user">사용자 모드</option>
-                            <option value="admin">관리자 모드</option>
-                        </select>
+                        <input type="password" name="password" placeholder="비밀번호" required class="user-code-input">
                     </div>
                     <div style="text-align: center;">
                         <button type="submit" class="login-btn user-btn" style="width: 100%;">
@@ -30,8 +24,9 @@
                 </div>
                 </form>
                 <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; color: #666; font-size: 0.9rem;">
-                    <p><strong>사용자 모드:</strong> 라벨링 작업을 수행합니다 (관리자 승인 필요)</p>
-                    <p><strong>관리자 모드:</strong> 배치 생성 및 사용자 관리를 수행합니다</p>
+                    <p><strong>시스템 안내:</strong></p>
+                    <p>• <strong>일반 사용자:</strong> 라벨링 작업을 수행합니다 (관리자 승인 필요)</p>
+                    <p>• <strong>관리자:</strong> 배치 생성 및 사용자 관리를 수행합니다</p>
                     <p style="margin-top: 15px; border-top: 1px solid #e1e8ed; padding-top: 15px;">
                         <strong>계정이 없으신가요?</strong> <a href="{% url 'register' %}" style="color: #4285f4;">회원가입하기</a>
                     </p>

@@ -83,7 +83,6 @@ def login_view(request):
         
         username = request.POST.get("username", "").strip()
         password = request.POST.get("password", "")
-        login_type = request.POST.get("login_type", "user")
         
         if not username or not password:
             logger.warning(f"Login attempt with empty credentials from IP: {request.META.get('REMOTE_ADDR')}")
@@ -129,10 +128,6 @@ def login_view(request):
     return render(request, "labeling/login.html", {
         'debug': settings.DEBUG if 'settings' in globals() else False,
     })
-
-def user_login(request):
-    """사용자 모드 로그인 (호환성 유지)"""
-    return login_view(request)
 
 def register_view(request):
     """사용자 회원가입 뷰 - 수정됨"""
@@ -193,10 +188,6 @@ def register(request):
     return register_view(request)
 
 
-
-def admin_login(request):
-    """관리자 모드 로그인 (호환성 유지)"""
-    return login_view(request)
 
 # [성능 향상] 캐싱 적용 (10분 캐시) - 선택적이지만 권장
 @cache_page(60 * 10)  # 10분 캐시
