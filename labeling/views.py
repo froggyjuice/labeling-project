@@ -148,10 +148,19 @@ def waiting(request):
 # [필수 기능] 관리자 대시보드
 # ============================================================================
 
-@login_required
+# ============================================================================
+# [임시 기능] 관리자 대시보드 - 로그인 없이 접근 가능 (임시)
+# ============================================================================
+# ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 @login_required를 다시 활성화해야 합니다.
+# 수정된 파일: labeling/views.py
+# 수정된 함수: admin_dashboard
+# ============================================================================
+
+# @login_required  # 임시로 주석 처리
 def admin_dashboard(request):
-    if request.user.role != 'admin':
-        return redirect('dashboard')
+    # 임시로 로그인 체크 비활성화
+    # if request.user.role != 'admin':
+    #     return redirect('dashboard')
     
     # [성능 향상] 배치 정보를 한 번에 가져오기 (N+1 문제 해결)
     batches = Batch.objects.prefetch_related('images').all().order_by('-created_at')
@@ -275,22 +284,26 @@ def admin_dashboard(request):
     return render(request, 'labeling/admin_dashboard.html', context)
 
 # ============================================================================
-# [필수 기능] 사용자 대시보드
+# [임시 기능] 사용자 대시보드 - 로그인 없이 접근 가능 (임시)
+# ============================================================================
+# ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 로그인 체크를 다시 활성화해야 합니다.
+# 수정된 파일: labeling/views.py
+# 수정된 함수: dashboard
 # ============================================================================
 
 def dashboard(request):
-    # [필수 기능] 인증 확인 (자동 리다이렉트 방지)
-    if not request.user.is_authenticated:
-        messages.error(request, "로그인이 필요합니다.")
-        return redirect("login")
+    # 임시로 로그인 체크 비활성화
+    # if not request.user.is_authenticated:
+    #     messages.error(request, "로그인이 필요합니다.")
+    #     return redirect("login")
     
-    # [필수 기능] 관리자는 관리자 대시보드로 리다이렉트
-    if request.user.role == 'admin':
-        return redirect('admin_dashboard')
+    # 임시로 관리자 리다이렉트 비활성화
+    # if request.user.role == 'admin':
+    #     return redirect('admin_dashboard')
     
-    # [필수 기능] 승인되지 않은 사용자는 대기 페이지로 리다이렉트
-    if not request.user.is_approved:
-        return redirect('waiting')
+    # 임시로 승인 체크 비활성화
+    # if not request.user.is_approved:
+    #     return redirect('waiting')
     
     # [성능 향상] 활성화된 배치만 표시 (최적화)
     batches = Batch.objects.filter(is_active=True).prefetch_related('images')
@@ -299,21 +312,20 @@ def dashboard(request):
     total_images = 0
     completed_images = 0
     
-    # [성능 향상] 사용자의 라벨링 결과를 한 번에 가져오기
-    user_labeling_results = LabelingResult.objects.filter(
-        user=request.user
-    ).values_list('image__batch_id', flat=True)
+    # 임시로 사용자별 데이터 대신 전체 데이터 사용 (로그인 없이 접근 가능하도록)
+    # [성능 향상] 전체 라벨링 결과를 한 번에 가져오기 (임시)
+    all_labeling_results = LabelingResult.objects.values_list('image__batch_id', flat=True)
     
-    # [성능 향상] 배치별 완료된 이미지 수를 한 번에 계산
+    # [성능 향상] 배치별 완료된 이미지 수를 한 번에 계산 (임시)
     batch_completion_counts = {}
-    for batch_id in user_labeling_results:
+    for batch_id in all_labeling_results:
         batch_completion_counts[batch_id] = batch_completion_counts.get(batch_id, 0) + 1
     
     for batch in batches:
         batch_images = batch.images.all()
         batch_total = batch_images.count()
         
-        # [성능 향상] 라벨링 완료된 이미지 수 계산 (최적화)
+        # [성능 향상] 라벨링 완료된 이미지 수 계산 (임시 - 전체 사용자 데이터)
         batch_completed = batch_completion_counts.get(batch.id, 0)
         
         progress_percentage = (batch_completed / batch_total * 100) if batch_total > 0 else 0
@@ -347,14 +359,18 @@ def dashboard(request):
     return render(request, "labeling/dashboard.html", context)
 
 # ============================================================================
-# [필수 기능] 라벨링 페이지
+# [임시 기능] 라벨링 페이지 - 로그인 없이 접근 가능 (임시)
+# ============================================================================
+# ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 로그인 체크를 다시 활성화해야 합니다.
+# 수정된 파일: labeling/views.py
+# 수정된 함수: labeling
 # ============================================================================
 
 def labeling(request, batch_id):
-    # [필수 기능] 인증 확인 (자동 리다이렉트 방지)
-    if not request.user.is_authenticated:
-        messages.error(request, "로그인이 필요합니다.")
-        return redirect("login")
+    # 임시로 로그인 체크 비활성화
+    # if not request.user.is_authenticated:
+    #     messages.error(request, "로그인이 필요합니다.")
+    #     return redirect("login")
     
     try:
         batch = Batch.objects.get(id=batch_id)
@@ -374,7 +390,7 @@ def labeling(request, batch_id):
             "current_index": current_index,
             "total_images": images.count(),
             "progress_percentage": progress_percentage,
-            "user_id": request.user.id,
+            "user_id": request.user.id if request.user.is_authenticated else 0,  # 임시로 0 사용
         }
         
         return render(request, "labeling/labeling_simple.html", context)
@@ -429,8 +445,9 @@ def save_label(request):
             image_id = data.get("imageId")
             selected_labels = data.get("labels", [])
             
-            if not request.user.is_authenticated:
-                return JsonResponse({"error": "로그인이 필요합니다"}, status=401)
+            # 임시로 로그인 체크 비활성화
+            # if not request.user.is_authenticated:
+            #     return JsonResponse({"error": "로그인이 필요합니다"}, status=401)
             
             # 이미지 확인
             try:
@@ -438,13 +455,22 @@ def save_label(request):
             except Image.DoesNotExist:
                 return JsonResponse({"error": "이미지를 찾을 수 없습니다"}, status=404)
             
+            # 임시로 사용자 관련 처리 비활성화 (로그인 없이 접근 가능하도록)
             # 기존 라벨링 결과 삭제 (동일 사용자, 동일 이미지)
-            LabelingResult.objects.filter(user=request.user, image=image).delete()
+            # LabelingResult.objects.filter(user=request.user, image=image).delete()
             
-            # 새로운 라벨링 결과 저장
+            # 새로운 라벨링 결과 저장 (임시로 사용자 없이)
             if selected_labels:
+                # 임시로 기본 사용자 생성 또는 사용 (실제로는 로그인된 사용자 사용)
+                from django.contrib.auth import get_user_model
+                User = get_user_model()
+                default_user, created = User.objects.get_or_create(
+                    username='temp_user',
+                    defaults={'email': 'temp@example.com', 'role': 'user', 'is_approved': True}
+                )
+                
                 labeling_result = LabelingResult.objects.create(
-                    user=request.user,
+                    user=default_user,  # 임시 사용자 사용
                     image=image
                 )
                 
