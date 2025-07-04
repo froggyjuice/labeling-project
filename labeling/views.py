@@ -14,14 +14,20 @@ Django Views for Image Labeling System
 # ============================================================================
 import os
 import json
+import logging
 from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponse
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .models import Batch, Image, Label, LabelingResult, ImageAccessLog, Message
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, csrf_protect
+from django.views.decorators.cache import never_cache
+from django.views.decorators.debug import sensitive_post_parameters
+from django.utils.decorators import method_decorator
 from django.db import models
+
+logger = logging.getLogger(__name__)
 
 # [필수 기능] Google Drive API 관련 import
 from googleapiclient.discovery import build
@@ -54,36 +60,82 @@ print("🔧 Google IAM 서비스 계정 기반 인증 시스템 사용 중")
 # [필수 기능] 로그인 관련 뷰
 # ============================================================================
 
-# [성능 향상] 캐싱 적용 (5분 캐시) - 선택적이지만 권장
-@cache_page(60 * 5)  # 5분 캐시
-@vary_on_cookie
+@sensitive_post_parameters()
+@csrf_protect
+@never_cache
 def login_view(request):
+    """
+    사용자 로그인 처리 - CSRF 보안 강화
+    """
     if request.user.is_authenticated:
+        logger.info(f"Already authenticated user {request.user.username} trying to access login page")
         return redirect("dashboard")
     
     if request.method == "POST":
-        username = request.POST.get("username")
-        password = request.POST.get("password")
-        login_type = request.POST.get("login_type")
+        logger.debug(f"POST request received for login from IP: {request.META.get('REMOTE_ADDR')}")
         
-        user = authenticate(request, username=username, password=password)
-        if user is not None:
-            login(request, user)
-            if login_type == "admin" and user.is_staff:
-                return redirect("admin_dashboard")
-            elif login_type == "user":
-                return redirect("dashboard")
+        # CSRF 토큰 확인
+        csrf_token = request.POST.get('csrfmiddlewaretoken')
+        if not csrf_token:
+            logger.warning(f"Login attempt without CSRF token from IP: {request.META.get('REMOTE_ADDR')}")
+            messages.error(request, "보안 토큰이 없습니다. 페이지를 새로고침하고 다시 시도해주세요.")
+            return render(request, "labeling/login.html")
+        
+        username = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "")
+        login_type = request.POST.get("login_type", "user")
+        
+        if not username or not password:
+            logger.warning(f"Login attempt with empty credentials from IP: {request.META.get('REMOTE_ADDR')}")
+            messages.error(request, "사용자명과 비밀번호를 모두 입력해주세요.")
+            return render(request, "labeling/login.html")
+        
+        try:
+            user = authenticate(request, username=username, password=password)
+            
+            if user is not None:
+                if user.is_active:
+                    login(request, user)
+                    logger.info(f"Successful login for user: {username} from IP: {request.META.get('REMOTE_ADDR')}")
+                    
+                    # 역할별 리다이렉트 처리
+                    if login_type == "admin" and user.role == 'admin':
+                        messages.success(request, f"{user.username}님, 관리자 대시보드에 오신 것을 환영합니다!")
+                        return redirect("admin_dashboard")
+                    elif login_type == "user" and user.role == 'user':
+                        if user.is_approved:
+                            messages.success(request, f"{user.username}님, 환영합니다!")
+                            return redirect("dashboard")
+                        else:
+                            messages.info(request, "계정 승인 대기 중입니다. 관리자의 승인을 기다려주세요.")
+                            return redirect("waiting")
+                    else:
+                        # 역할과 로그인 타입이 맞지 않는 경우
+                        logout(request)
+                        logger.warning(f"Role mismatch for user {username}: requested {login_type}, actual role {user.role}")
+                        messages.error(request, f"'{login_type}' 권한이 없습니다. 올바른 계정 유형을 선택해주세요.")
+                else:
+                    logger.warning(f"Login attempt for inactive user: {username}")
+                    messages.error(request, "비활성화된 계정입니다. 관리자에게 문의하세요.")
             else:
-                messages.error(request, "권한이 없습니다.")
-        else:
-            messages.error(request, "로그인 정보가 올바르지 않습니다.")
+                logger.warning(f"Failed login attempt for username: {username} from IP: {request.META.get('REMOTE_ADDR')}")
+                messages.error(request, "사용자명 또는 비밀번호가 올바르지 않습니다.")
+                
+        except Exception as e:
+            logger.error(f"Login error for user {username}: {str(e)}")
+            messages.error(request, "로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.")
     
-    return render(request, "labeling/login.html")
+    # GET 요청이거나 로그인 실패 시 로그인 페이지 렌더링
+    return render(request, "labeling/login.html", {
+        'debug': settings.DEBUG if 'settings' in globals() else False,
+    })
 
 def user_login(request):
+    """사용자 모드 로그인 (호환성 유지)"""
     return login_view(request)
 
 def admin_login(request):
+    """관리자 모드 로그인 (호환성 유지)"""
     return login_view(request)
 
 # [성능 향상] 캐싱 적용 (10분 캐시) - 선택적이지만 권장
