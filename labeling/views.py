@@ -90,58 +90,37 @@ def login_view(request):
             messages.error(request, "사용자명과 비밀번호를 모두 입력해주세요.")
             return render(request, "labeling/login.html")
         
-        # ============================================================================
-        # [임시 기능] 인증 확인 과정 비활성화 (임시)
-        # ============================================================================
-        # ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 인증 확인을 다시 활성화해야 합니다.
-        # 수정된 파일: labeling/views.py
-        # 수정된 함수: login_view
-        # ============================================================================
-        
-        # try:
-        #     user = authenticate(request, username=username, password=password)
-        #     
-        #     if user is not None:
-        #         if user.is_active:
-        #             login(request, user)
-        #             logger.info(f"Successful login for user: {username} from IP: {request.META.get('REMOTE_ADDR')}")
-        #             
-        #             # 역할별 리다이렉트 처리
-        #             if login_type == "admin" and user.role == 'admin':
-        #                 messages.success(request, f"{user.username}님, 관리자 대시보드에 오신 것을 환영합니다!")
-        #                 return redirect("admin_dashboard")
-        #             elif login_type == "user" and user.role == 'user':
-        #                 if user.is_approved:
-        #                     messages.success(request, f"{user.username}님, 환영합니다!")
-        #                     return redirect("dashboard")
-        #                 else:
-        #                     messages.info(request, "계정 승인 대기 중입니다. 관리자의 승인을 기다려주세요.")
-        #                     return redirect("waiting")
-        #             else:
-        #                 # 역할과 로그인 타입이 맞지 않는 경우
-        #                 logout(request)
-        #                 logger.warning(f"Role mismatch for user {username}: requested {login_type}, actual role {user.role}")
-        #                 messages.error(request, f"'{login_type}' 권한이 없습니다. 올바른 계정 유형을 선택해주세요.")
-        #         else:
-        #             logger.warning(f"Login attempt for inactive user: {username}")
-        #             messages.error(request, "비활성화된 계정입니다. 관리자에게 문의하세요.")
-        #     else:
-        #         logger.warning(f"Failed login attempt for username: {username} from IP: {request.META.get('REMOTE_ADDR')}")
-        #         messages.error(request, "사용자명 또는 비밀번호가 올바르지 않습니다.")
-        #         
-        # except Exception as e:
-        #     logger.error(f"Login error for user {username}: {str(e)}")
-        #     messages.error(request, "로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.")
-        
-        # 임시로 로그인 타입에 따라 바로 리다이렉트 (인증 없이)
-        if login_type == "admin":
-            messages.success(request, "관리자 모드로 접속합니다.")
-            return redirect("admin_dashboard")
-        elif login_type == "user":
-            messages.success(request, "사용자 모드로 접속합니다.")
-            return redirect("dashboard")
-        else:
-            messages.error(request, "올바른 계정 유형을 선택해주세요.")
+        try:
+            user = authenticate(request, username=username, password=password)
+            
+            if user is not None:
+                if user.is_active:
+                    login(request, user)
+                    logger.info(f"Successful login for user: {username} from IP: {request.META.get('REMOTE_ADDR')}")
+                    # 역할별 리다이렉트 처리
+                    if login_type == "admin" and user.role == 'admin':
+                        messages.success(request, f"{user.username}님, 관리자 대시보드에 오신 것을 환영합니다!")
+                        return redirect("admin_dashboard")
+                    elif login_type == "user" and user.role == 'user':
+                        if user.is_approved:
+                            messages.success(request, f"{user.username}님, 환영합니다!")
+                            return redirect("dashboard")
+                        else:
+                            logger.warning(f"Login attempt for inactive user: {username}")
+                            messages.error(request, "비활성화된 계정입니다. 관리자에게 문의하세요.")
+                    else:
+                        logger.warning(f"Role mismatch for user {username}: requested {login_type}, actual role {user.role}")
+                        messages.error(request, f"'{login_type}' 권한이 없습니다. 올바른 계정 유형을 선택해주세요.")
+                else:
+                    logger.warning(f"Login attempt for inactive user: {username}")
+                    messages.error(request, "비활성화된 계정입니다. 관리자에게 문의하세요.")
+            else:
+                messages.info(request, "계정 승인 대기 중입니다. 관리자의 승인을 기다려주세요.")
+                return redirect("waiting")
+                
+        except Exception as e:
+            logger.error(f"Login error for user {username}: {str(e)}")
+            messages.error(request, "로그인 처리 중 오류가 발생했습니다. 다시 시도해주세요.")
     
     # GET 요청이거나 로그인 실패 시 로그인 페이지 렌더링
     return render(request, "labeling/login.html", {
@@ -166,19 +145,10 @@ def waiting(request):
 # [필수 기능] 관리자 대시보드
 # ============================================================================
 
-# ============================================================================
-# [임시 기능] 관리자 대시보드 - 로그인 없이 접근 가능 (임시)
-# ============================================================================
-# ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 @login_required를 다시 활성화해야 합니다.
-# 수정된 파일: labeling/views.py
-# 수정된 함수: admin_dashboard
-# ============================================================================
-
-# @login_required  # 임시로 주석 처리
+@login_required
 def admin_dashboard(request):
-    # 임시로 로그인 체크 비활성화
-    # if request.user.role != 'admin':
-    #     return redirect('dashboard')
+    if request.user.role != 'admin':
+        return redirect('dashboard')
     
     # [성능 향상] 배치 정보를 한 번에 가져오기 (N+1 문제 해결)
     batches = Batch.objects.prefetch_related('images').all().order_by('-created_at')
@@ -302,26 +272,22 @@ def admin_dashboard(request):
     return render(request, 'labeling/admin_dashboard.html', context)
 
 # ============================================================================
-# [임시 기능] 사용자 대시보드 - 로그인 없이 접근 가능 (임시)
-# ============================================================================
-# ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 로그인 체크를 다시 활성화해야 합니다.
-# 수정된 파일: labeling/views.py
-# 수정된 함수: dashboard
+# [필수 기능] 사용자 대시보드
 # ============================================================================
 
 def dashboard(request):
-    # 임시로 로그인 체크 비활성화
-    # if not request.user.is_authenticated:
-    #     messages.error(request, "로그인이 필요합니다.")
-    #     return redirect("login")
+    # [필수 기능] 인증 확인 (자동 리다이렉트 방지)
+    if not request.user.is_authenticated:
+        messages.error(request, "로그인이 필요합니다.")
+        return redirect("login")
     
-    # 임시로 관리자 리다이렉트 비활성화
-    # if request.user.role == 'admin':
-    #     return redirect('admin_dashboard')
+    # [필수 기능] 관리자는 관리자 대시보드로 리다이렉트
+    if request.user.role == 'admin':
+        return redirect('admin_dashboard')
     
-    # 임시로 승인 체크 비활성화
-    # if not request.user.is_approved:
-    #     return redirect('waiting')
+    # [필수 기능] 승인되지 않은 사용자는 대기 페이지로 리다이렉트
+    if not request.user.is_approved:
+        return redirect('waiting')
     
     # [성능 향상] 활성화된 배치만 표시 (최적화)
     batches = Batch.objects.filter(is_active=True).prefetch_related('images')
@@ -330,20 +296,21 @@ def dashboard(request):
     total_images = 0
     completed_images = 0
     
-    # 임시로 사용자별 데이터 대신 전체 데이터 사용 (로그인 없이 접근 가능하도록)
-    # [성능 향상] 전체 라벨링 결과를 한 번에 가져오기 (임시)
-    all_labeling_results = LabelingResult.objects.values_list('image__batch_id', flat=True)
+    # [성능 향상] 사용자의 라벨링 결과를 한 번에 가져오기
+    user_labeling_results = LabelingResult.objects.filter(
+        user=request.user
+    ).values_list('image__batch_id', flat=True)
     
-    # [성능 향상] 배치별 완료된 이미지 수를 한 번에 계산 (임시)
+    # [성능 향상] 배치별 완료된 이미지 수를 한 번에 계산
     batch_completion_counts = {}
-    for batch_id in all_labeling_results:
+    for batch_id in user_labeling_results:
         batch_completion_counts[batch_id] = batch_completion_counts.get(batch_id, 0) + 1
     
     for batch in batches:
         batch_images = batch.images.all()
         batch_total = batch_images.count()
         
-        # [성능 향상] 라벨링 완료된 이미지 수 계산 (임시 - 전체 사용자 데이터)
+        # [성능 향상] 라벨링 완료된 이미지 수 계산 (최적화)
         batch_completed = batch_completion_counts.get(batch.id, 0)
         
         progress_percentage = (batch_completed / batch_total * 100) if batch_total > 0 else 0
@@ -377,18 +344,14 @@ def dashboard(request):
     return render(request, "labeling/dashboard.html", context)
 
 # ============================================================================
-# [임시 기능] 라벨링 페이지 - 로그인 없이 접근 가능 (임시)
-# ============================================================================
-# ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 로그인 체크를 다시 활성화해야 합니다.
-# 수정된 파일: labeling/views.py
-# 수정된 함수: labeling
+# [필수 기능] 라벨링 페이지
 # ============================================================================
 
 def labeling(request, batch_id):
-    # 임시로 로그인 체크 비활성화
-    # if not request.user.is_authenticated:
-    #     messages.error(request, "로그인이 필요합니다.")
-    #     return redirect("login")
+    # [필수 기능] 인증 확인 (자동 리다이렉트 방지)
+    if not request.user.is_authenticated:
+        messages.error(request, "로그인이 필요합니다.")
+        return redirect("login")
     
     try:
         batch = Batch.objects.get(id=batch_id)
@@ -408,7 +371,7 @@ def labeling(request, batch_id):
             "current_index": current_index,
             "total_images": images.count(),
             "progress_percentage": progress_percentage,
-            "user_id": request.user.id if request.user.is_authenticated else 0,  # 임시로 0 사용
+            "user_id": request.user.id,
         }
         
         return render(request, "labeling/labeling_simple.html", context)
@@ -463,9 +426,8 @@ def save_label(request):
             image_id = data.get("imageId")
             selected_labels = data.get("labels", [])
             
-            # 임시로 로그인 체크 비활성화
-            # if not request.user.is_authenticated:
-            #     return JsonResponse({"error": "로그인이 필요합니다"}, status=401)
+            if not request.user.is_authenticated:
+                return JsonResponse({"error": "로그인이 필요합니다"}, status=401)
             
             # 이미지 확인
             try:
@@ -473,22 +435,13 @@ def save_label(request):
             except Image.DoesNotExist:
                 return JsonResponse({"error": "이미지를 찾을 수 없습니다"}, status=404)
             
-            # 임시로 사용자 관련 처리 비활성화 (로그인 없이 접근 가능하도록)
             # 기존 라벨링 결과 삭제 (동일 사용자, 동일 이미지)
-            # LabelingResult.objects.filter(user=request.user, image=image).delete()
+            LabelingResult.objects.filter(user=request.user, image=image).delete()
             
-            # 새로운 라벨링 결과 저장 (임시로 사용자 없이)
+            # 새로운 라벨링 결과 저장
             if selected_labels:
-                # 임시로 기본 사용자 생성 또는 사용 (실제로는 로그인된 사용자 사용)
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                default_user, created = User.objects.get_or_create(
-                    username='temp_user',
-                    defaults={'email': 'temp@example.com', 'role': 'user', 'is_approved': True}
-                )
-                
                 labeling_result = LabelingResult.objects.create(
-                    user=default_user,  # 임시 사용자 사용
+                    user=request.user,
                     image=image
                 )
                 
@@ -830,17 +783,9 @@ def drive_import(request):
     
     return render(request, 'labeling/drive_import.html')
 
-# ============================================================================
-# [임시 기능] Google Drive 이미지 프록시 - 인증 없이 접근 가능 (임시)
-# ============================================================================
-# ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 @login_required를 다시 활성화해야 합니다.
-# 수정된 파일: labeling/views.py
-# 수정된 함수: proxy_drive_image
-# ============================================================================
-
-# @login_required  # 임시로 주석 처리
+@login_required
 def proxy_drive_image(request, file_id):
-    """Google Drive 이미지를 프록시해서 제공 - 임시로 인증 없이 접근 가능"""
+    """Google Drive 이미지를 프록시해서 제공 - 보안 강화"""
     from .utils import get_service_account_credentials
     # 사용자 IP 주소 가져오기
     def get_client_ip(request):
@@ -852,86 +797,75 @@ def proxy_drive_image(request, file_id):
         return ip
     client_ip = get_client_ip(request)
     user_agent = request.META.get('HTTP_USER_AGENT', '')
-    
-    # ============================================================================
-    # [임시 기능] 인증 및 권한 확인 비활성화 (임시)
-    # ============================================================================
-    # ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 다시 활성화해야 합니다.
-    # ============================================================================
-    
-    # Rate Limiting: 1분간 최대 30회 요청 허용 (임시로 비활성화)
-    # from django.utils import timezone
-    # from datetime import timedelta
-    # one_minute_ago = timezone.now() - timedelta(minutes=1)
-    # recent_requests = ImageAccessLog.objects.filter(
-    #     user=request.user,
-    #     access_time__gte=one_minute_ago
-    # ).count()
-    # if recent_requests >= 30:
-    #     # 로그 기록
-    #     ImageAccessLog.objects.create(
-    #         user=request.user,
-    #         image_file_id=file_id,
-    #         ip_address=client_ip,
-    #         user_agent=user_agent,
-    #         success=False,
-    #         error_message="Rate limit exceeded"
-    #     )
-    #     return HttpResponse("Rate limit exceeded. Please wait before requesting more images.", status=429)
-    
-    # 1. 기본 인증 확인 (임시로 비활성화)
-    # if not request.user.is_authenticated:
-    #     ImageAccessLog.objects.create(
-    #         user=request.user,
-    #         image_file_id=file_id,
-    #         ip_address=client_ip,
-    #         user_agent=user_agent,
-    #         success=False,
-    #         error_message="Authentication required"
-    #     )
-    #     return HttpResponse("Authentication required", status=401)
-    
-    # 2. 사용자 권한 확인 (임시로 비활성화)
-    # if request.user.role == 'admin':
-    #     pass
-    # elif request.user.role == 'user' and request.user.is_approved:
-    #     user_accessible_file_ids = Image.objects.filter(
-    #         batch__is_active=True,
-    #         drive_file_id=file_id
-    #     ).values_list('drive_file_id', flat=True)
-    #     if file_id not in user_accessible_file_ids:
-    #         ImageAccessLog.objects.create(
-    #         user=request.user,
-    #         image_file_id=file_id,
-    #         ip_address=client_ip,
-    #         user_agent=user_agent,
-    #         success=False,
-    #         error_message="Access denied: No permission for this image"
-    #     )
-    #         return HttpResponse("Access denied: You don't have permission to view this image", status=403)
-    # else:
-    #     ImageAccessLog.objects.create(
-    #         user=request.user,
-    #         image_file_id=file_id,
-    #         ip_address=client_ip,
-    #         user_agent=user_agent,
-    #         success=False,
-    #         error_message="Access denied: User not approved"
-    #     )
-    #     return HttpResponse("Access denied: User not approved", status=403)
-    
-    # 세션 키 확인 (임시로 비활성화)
-    # session_key = request.session.session_key
-    # if not session_key:
-    #     ImageAccessLog.objects.create(
-    #         user=request.user,
-    #         image_file_id=file_id,
-    #         ip_address=client_ip,
-    #         user_agent=user_agent,
-    #         success=False,
-    #         error_message="Invalid session"
-    #     )
-    #     return HttpResponse("Invalid session", status=401)
+    # Rate Limiting: 1분간 최대 30회 요청 허용
+    from django.utils import timezone
+    from datetime import timedelta
+    one_minute_ago = timezone.now() - timedelta(minutes=1)
+    recent_requests = ImageAccessLog.objects.filter(
+        user=request.user,
+        access_time__gte=one_minute_ago
+    ).count()
+    if recent_requests >= 30:
+        # 로그 기록
+        ImageAccessLog.objects.create(
+            user=request.user,
+            image_file_id=file_id,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            success=False,
+            error_message="Rate limit exceeded"
+        )
+        return HttpResponse("Rate limit exceeded. Please wait before requesting more images.", status=429)
+    # 1. 기본 인증 확인
+    if not request.user.is_authenticated:
+        ImageAccessLog.objects.create(
+            user=request.user,
+            image_file_id=file_id,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            success=False,
+            error_message="Authentication required"
+        )
+        return HttpResponse("Authentication required", status=401)
+    # 2. 사용자 권한 확인 (관리자 또는 승인된 사용자만)
+    if request.user.role == 'admin':
+        pass
+    elif request.user.role == 'user' and request.user.is_approved:
+        user_accessible_file_ids = Image.objects.filter(
+            batch__is_active=True,
+            drive_file_id=file_id
+        ).values_list('drive_file_id', flat=True)
+        if file_id not in user_accessible_file_ids:
+            ImageAccessLog.objects.create(
+                user=request.user,
+                image_file_id=file_id,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                success=False,
+                error_message="Access denied: No permission for this image"
+            )
+            return HttpResponse("Access denied: You don't have permission to view this image", status=403)
+    else:
+        ImageAccessLog.objects.create(
+            user=request.user,
+            image_file_id=file_id,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            success=False,
+            error_message="Access denied: User not approved"
+        )
+        return HttpResponse("Access denied: User not approved", status=403)
+    session_key = request.session.session_key
+    if not session_key:
+        ImageAccessLog.objects.create(
+            user=request.user,
+            image_file_id=file_id,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            success=False,
+            error_message="Invalid session"
+        )
+        return HttpResponse("Invalid session", status=401)
     try:
         try:
             image_obj = Image.objects.get(drive_file_id=file_id)
@@ -944,10 +878,8 @@ def proxy_drive_image(request, file_id):
                     content_type, _ = mimetypes.guess_type(local_path)
                     if not content_type:
                         content_type = 'image/jpeg'
-                    # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
-                    user_for_log = request.user if request.user.is_authenticated else None
                     ImageAccessLog.objects.create(
-                        user=user_for_log,
+                        user=request.user,
                         image_file_id=file_id,
                         ip_address=client_ip,
                         user_agent=user_agent,
@@ -963,10 +895,8 @@ def proxy_drive_image(request, file_id):
         # IAM 서비스 계정 credentials 사용
         admin_credentials = get_service_account_credentials()
         if not admin_credentials:
-            # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
-            user_for_log = request.user if request.user.is_authenticated else None
             ImageAccessLog.objects.create(
-                user=user_for_log,
+                user=request.user,
                 image_file_id=file_id,
                 ip_address=client_ip,
                 user_agent=user_agent,
@@ -988,10 +918,8 @@ def proxy_drive_image(request, file_id):
             thumbnail_url = thumbnail_link.replace('=s220', '=s800')
             response = requests.get(thumbnail_url)
             if response.status_code == 200:
-                # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
-                user_for_log = request.user if request.user.is_authenticated else None
                 ImageAccessLog.objects.create(
-                    user=user_for_log,
+                    user=request.user,
                     image_file_id=file_id,
                     ip_address=client_ip,
                     user_agent=user_agent,
@@ -1005,10 +933,8 @@ def proxy_drive_image(request, file_id):
                 return http_response
         try:
             file_content = service.files().get_media(fileId=file_id).execute()
-            # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
-            user_for_log = request.user if request.user.is_authenticated else None
             ImageAccessLog.objects.create(
-                user=user_for_log,
+                user=request.user,
                 image_file_id=file_id,
                 ip_address=client_ip,
                 user_agent=user_agent,
@@ -1022,10 +948,8 @@ def proxy_drive_image(request, file_id):
             return http_response
         except Exception as e:
             print(f"직접 다운로드 실패: {str(e)}")
-            # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
-            user_for_log = request.user if request.user.is_authenticated else None
             ImageAccessLog.objects.create(
-                user=user_for_log,
+                user=request.user,
                 image_file_id=file_id,
                 ip_address=client_ip,
                 user_agent=user_agent,
@@ -1035,10 +959,8 @@ def proxy_drive_image(request, file_id):
             return HttpResponse("Image not available", status=404)
     except Exception as e:
         print(f"이미지 프록시 오류: {str(e)}")
-        # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
-        user_for_log = request.user if request.user.is_authenticated else None
         ImageAccessLog.objects.create(
-            user=user_for_log,
+            user=request.user,
             image_file_id=file_id,
             ip_address=client_ip,
             user_agent=user_agent,
