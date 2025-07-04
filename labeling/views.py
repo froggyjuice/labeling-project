@@ -830,9 +830,17 @@ def drive_import(request):
     
     return render(request, 'labeling/drive_import.html')
 
-@login_required
+# ============================================================================
+# [임시 기능] Google Drive 이미지 프록시 - 인증 없이 접근 가능 (임시)
+# ============================================================================
+# ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 @login_required를 다시 활성화해야 합니다.
+# 수정된 파일: labeling/views.py
+# 수정된 함수: proxy_drive_image
+# ============================================================================
+
+# @login_required  # 임시로 주석 처리
 def proxy_drive_image(request, file_id):
-    """Google Drive 이미지를 프록시해서 제공 - 보안 강화"""
+    """Google Drive 이미지를 프록시해서 제공 - 임시로 인증 없이 접근 가능"""
     from .utils import get_service_account_credentials
     # 사용자 IP 주소 가져오기
     def get_client_ip(request):
@@ -844,75 +852,86 @@ def proxy_drive_image(request, file_id):
         return ip
     client_ip = get_client_ip(request)
     user_agent = request.META.get('HTTP_USER_AGENT', '')
-    # Rate Limiting: 1분간 최대 30회 요청 허용
-    from django.utils import timezone
-    from datetime import timedelta
-    one_minute_ago = timezone.now() - timedelta(minutes=1)
-    recent_requests = ImageAccessLog.objects.filter(
-        user=request.user,
-        access_time__gte=one_minute_ago
-    ).count()
-    if recent_requests >= 30:
-        # 로그 기록
-        ImageAccessLog.objects.create(
-            user=request.user,
-            image_file_id=file_id,
-            ip_address=client_ip,
-            user_agent=user_agent,
-            success=False,
-            error_message="Rate limit exceeded"
-        )
-        return HttpResponse("Rate limit exceeded. Please wait before requesting more images.", status=429)
-    # 1. 기본 인증 확인
-    if not request.user.is_authenticated:
-        ImageAccessLog.objects.create(
-            user=request.user,
-            image_file_id=file_id,
-            ip_address=client_ip,
-            user_agent=user_agent,
-            success=False,
-            error_message="Authentication required"
-        )
-        return HttpResponse("Authentication required", status=401)
-    # 2. 사용자 권한 확인 (관리자 또는 승인된 사용자만)
-    if request.user.role == 'admin':
-        pass
-    elif request.user.role == 'user' and request.user.is_approved:
-        user_accessible_file_ids = Image.objects.filter(
-            batch__is_active=True,
-            drive_file_id=file_id
-        ).values_list('drive_file_id', flat=True)
-        if file_id not in user_accessible_file_ids:
-            ImageAccessLog.objects.create(
-                user=request.user,
-                image_file_id=file_id,
-                ip_address=client_ip,
-                user_agent=user_agent,
-                success=False,
-                error_message="Access denied: No permission for this image"
-            )
-            return HttpResponse("Access denied: You don't have permission to view this image", status=403)
-    else:
-        ImageAccessLog.objects.create(
-            user=request.user,
-            image_file_id=file_id,
-            ip_address=client_ip,
-            user_agent=user_agent,
-            success=False,
-            error_message="Access denied: User not approved"
-        )
-        return HttpResponse("Access denied: User not approved", status=403)
-    session_key = request.session.session_key
-    if not session_key:
-        ImageAccessLog.objects.create(
-            user=request.user,
-            image_file_id=file_id,
-            ip_address=client_ip,
-            user_agent=user_agent,
-            success=False,
-            error_message="Invalid session"
-        )
-        return HttpResponse("Invalid session", status=401)
+    
+    # ============================================================================
+    # [임시 기능] 인증 및 권한 확인 비활성화 (임시)
+    # ============================================================================
+    # ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 다시 활성화해야 합니다.
+    # ============================================================================
+    
+    # Rate Limiting: 1분간 최대 30회 요청 허용 (임시로 비활성화)
+    # from django.utils import timezone
+    # from datetime import timedelta
+    # one_minute_ago = timezone.now() - timedelta(minutes=1)
+    # recent_requests = ImageAccessLog.objects.filter(
+    #     user=request.user,
+    #     access_time__gte=one_minute_ago
+    # ).count()
+    # if recent_requests >= 30:
+    #     # 로그 기록
+    #     ImageAccessLog.objects.create(
+    #         user=request.user,
+    #         image_file_id=file_id,
+    #         ip_address=client_ip,
+    #         user_agent=user_agent,
+    #         success=False,
+    #         error_message="Rate limit exceeded"
+    #     )
+    #     return HttpResponse("Rate limit exceeded. Please wait before requesting more images.", status=429)
+    
+    # 1. 기본 인증 확인 (임시로 비활성화)
+    # if not request.user.is_authenticated:
+    #     ImageAccessLog.objects.create(
+    #         user=request.user,
+    #         image_file_id=file_id,
+    #         ip_address=client_ip,
+    #         user_agent=user_agent,
+    #         success=False,
+    #         error_message="Authentication required"
+    #     )
+    #     return HttpResponse("Authentication required", status=401)
+    
+    # 2. 사용자 권한 확인 (임시로 비활성화)
+    # if request.user.role == 'admin':
+    #     pass
+    # elif request.user.role == 'user' and request.user.is_approved:
+    #     user_accessible_file_ids = Image.objects.filter(
+    #         batch__is_active=True,
+    #         drive_file_id=file_id
+    #     ).values_list('drive_file_id', flat=True)
+    #     if file_id not in user_accessible_file_ids:
+    #         ImageAccessLog.objects.create(
+    #         user=request.user,
+    #         image_file_id=file_id,
+    #         ip_address=client_ip,
+    #         user_agent=user_agent,
+    #         success=False,
+    #         error_message="Access denied: No permission for this image"
+    #     )
+    #         return HttpResponse("Access denied: You don't have permission to view this image", status=403)
+    # else:
+    #     ImageAccessLog.objects.create(
+    #         user=request.user,
+    #         image_file_id=file_id,
+    #         ip_address=client_ip,
+    #         user_agent=user_agent,
+    #         success=False,
+    #         error_message="Access denied: User not approved"
+    #     )
+    #     return HttpResponse("Access denied: User not approved", status=403)
+    
+    # 세션 키 확인 (임시로 비활성화)
+    # session_key = request.session.session_key
+    # if not session_key:
+    #     ImageAccessLog.objects.create(
+    #         user=request.user,
+    #         image_file_id=file_id,
+    #         ip_address=client_ip,
+    #         user_agent=user_agent,
+    #         success=False,
+    #         error_message="Invalid session"
+    #     )
+    #     return HttpResponse("Invalid session", status=401)
     try:
         try:
             image_obj = Image.objects.get(drive_file_id=file_id)
@@ -925,8 +944,10 @@ def proxy_drive_image(request, file_id):
                     content_type, _ = mimetypes.guess_type(local_path)
                     if not content_type:
                         content_type = 'image/jpeg'
+                    # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
+                    user_for_log = request.user if request.user.is_authenticated else None
                     ImageAccessLog.objects.create(
-                        user=request.user,
+                        user=user_for_log,
                         image_file_id=file_id,
                         ip_address=client_ip,
                         user_agent=user_agent,
@@ -942,8 +963,10 @@ def proxy_drive_image(request, file_id):
         # IAM 서비스 계정 credentials 사용
         admin_credentials = get_service_account_credentials()
         if not admin_credentials:
+            # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
+            user_for_log = request.user if request.user.is_authenticated else None
             ImageAccessLog.objects.create(
-                user=request.user,
+                user=user_for_log,
                 image_file_id=file_id,
                 ip_address=client_ip,
                 user_agent=user_agent,
@@ -965,8 +988,10 @@ def proxy_drive_image(request, file_id):
             thumbnail_url = thumbnail_link.replace('=s220', '=s800')
             response = requests.get(thumbnail_url)
             if response.status_code == 200:
+                # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
+                user_for_log = request.user if request.user.is_authenticated else None
                 ImageAccessLog.objects.create(
-                    user=request.user,
+                    user=user_for_log,
                     image_file_id=file_id,
                     ip_address=client_ip,
                     user_agent=user_agent,
@@ -980,8 +1005,10 @@ def proxy_drive_image(request, file_id):
                 return http_response
         try:
             file_content = service.files().get_media(fileId=file_id).execute()
+            # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
+            user_for_log = request.user if request.user.is_authenticated else None
             ImageAccessLog.objects.create(
-                user=request.user,
+                user=user_for_log,
                 image_file_id=file_id,
                 ip_address=client_ip,
                 user_agent=user_agent,
@@ -995,8 +1022,10 @@ def proxy_drive_image(request, file_id):
             return http_response
         except Exception as e:
             print(f"직접 다운로드 실패: {str(e)}")
+            # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
+            user_for_log = request.user if request.user.is_authenticated else None
             ImageAccessLog.objects.create(
-                user=request.user,
+                user=user_for_log,
                 image_file_id=file_id,
                 ip_address=client_ip,
                 user_agent=user_agent,
@@ -1006,8 +1035,10 @@ def proxy_drive_image(request, file_id):
             return HttpResponse("Image not available", status=404)
     except Exception as e:
         print(f"이미지 프록시 오류: {str(e)}")
+        # 임시로 사용자 정보 처리 (로그인하지 않은 사용자 지원)
+        user_for_log = request.user if request.user.is_authenticated else None
         ImageAccessLog.objects.create(
-            user=request.user,
+            user=user_for_log,
             image_file_id=file_id,
             ip_address=client_ip,
             user_agent=user_agent,

@@ -569,12 +569,20 @@ function handleImageError(img, batchName) {
     `;
     img.parentElement.appendChild(errorDiv);
     
-    // 관리자에게 자동 문의 제안
-    setTimeout(() => {
-        if (confirm(`"${batchName}" 배치의 이미지를 불러올 수 없습니다.\n\n관리자에게 문의하시겠습니까?`)) {
-            openMessageModal('batch', null, batchName);
-        }
-    }, 2000);
+    // ============================================================================
+    // [임시 기능] 관리자 문의 팝업 비활성화 (임시)
+    // ============================================================================
+    // ⚠️ 주의: 이는 임시 기능입니다. 프로덕션에서는 반드시 다시 활성화해야 합니다.
+    // 수정된 파일: labeling/templates/labeling/dashboard.html
+    // 수정된 함수: handleImageError
+    // ============================================================================
+    
+    // 관리자에게 자동 문의 제안 (임시로 비활성화)
+    // setTimeout(() => {
+    //     if (confirm(`"${batchName}" 배치의 이미지를 불러올 수 없습니다.\n\n관리자에게 문의하시겠습니까?`)) {
+    //         openMessageModal('batch', null, batchName);
+    //     }
+    // }, 2000);
 }
 
 function handleImageLoad(img) {
