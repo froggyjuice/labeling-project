@@ -12,6 +12,7 @@ def root_redirect(request):
 urlpatterns = [
     path('', root_redirect, name='root'),
     path('login/', views.login_view, name='login'),
+    path('register/', views.register_view, name='register'),
     path('user-login/', views.user_login, name='user_login'),
     path('admin-login/', views.admin_login, name='admin_login'),
     path('logout/', views.logout_view, name='logout'),

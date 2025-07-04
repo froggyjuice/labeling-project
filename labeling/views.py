@@ -131,6 +131,66 @@ def user_login(request):
     """사용자 모드 로그인 (호환성 유지)"""
     return login_view(request)
 
+def register_view(request):
+    """사용자 회원가입 뷰 - 수정됨"""
+    if request.method == "POST":
+        username = request.POST.get("username", "").strip()
+        password1 = request.POST.get("password1", "")
+        password2 = request.POST.get("password2", "")
+        email = request.POST.get("email", "").strip()
+        
+        # 입력값 검증
+        if not username or not password1 or not password2 or not email:
+            messages.error(request, "모든 필드를 입력해주세요.")
+            return render(request, "labeling/register.html")
+        
+        if password1 != password2:
+            messages.error(request, "비밀번호가 일치하지 않습니다.")
+            return render(request, "labeling/register.html")
+        
+        if len(password1) < 8:
+            messages.error(request, "비밀번호는 최소 8자 이상이어야 합니다.")
+            return render(request, "labeling/register.html")
+        
+        # 사용자명 중복 확인
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        if User.objects.filter(username=username).exists():
+            messages.error(request, "이미 사용 중인 사용자명입니다.")
+            return render(request, "labeling/register.html")
+        
+        if User.objects.filter(email=email).exists():
+            messages.error(request, "이미 사용 중인 이메일입니다.")
+            return render(request, "labeling/register.html")
+        
+        try:
+            # 새 사용자 생성 (기본적으로 승인 대기 상태)
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password1,
+                role='user',
+                is_approved=False  # 관리자 승인 필요
+            )
+            
+            logger.info(f"New user registration: {username} from IP: {request.META.get('REMOTE_ADDR')}")
+            messages.success(request, "회원가입이 완료되었습니다. 관리자 승인 후 로그인이 가능합니다.")
+            return redirect("waiting")
+            
+        except Exception as e:
+            logger.error(f"Registration error for user {username}: {str(e)}")
+            messages.error(request, "회원가입 처리 중 오류가 발생했습니다. 다시 시도해주세요.")
+    
+    # GET 요청 시 회원가입 페이지 렌더링
+    return render(request, "labeling/register.html")
+
+def register(request):
+    """사용자 회원가입 (호환성 유지)"""
+    return register_view(request)
+
+
+
 def admin_login(request):
     """관리자 모드 로그인 (호환성 유지)"""
     return login_view(request)
@@ -1287,7 +1347,7 @@ def logout_view(request):
     request.session.flush()
     
     # 성공 메시지 추가
-    messages.success(request, f"{user_name}님이 성공적으로 로그아웃되었습니다.")
+    # messages.success(request, f"{user_name}님이 성공적으로 로그아웃되었습니다.")
     
     # 캐시 방지를 위한 응답 헤더 설정
     response = redirect("login")
